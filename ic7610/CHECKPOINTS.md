@@ -1,7 +1,7 @@
 # IC-7610 EXT checkpoints
 
 Each line is a version that was built and confirmed working, tagged ic7610-vNN.
-Upstream base: wfview dcd2c49. Build scripts are in build-scripts\.
+Upstream base: wfview 0985685 (GitHub wf-group/wfview master, v2.25). Build scripts are in build-scripts\.
 
 | Version | Date | Notes |
 |---|---|---|
