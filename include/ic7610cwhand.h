@@ -27,6 +27,8 @@
 #include <string>
 #include <vector>
 
+#include "ic7610cwwords.h"
+
 class Ic7610CwHandDecoder
 {
 public:
@@ -51,6 +53,8 @@ public:
         m_gaps.clear();
         m_markHist.clear();
         m_held.clear();
+        m_joiner.reset();
+        m_nextSoft = false;
         m_dot = 60.0f;
         m_dash = 180.0f;
         m_eg = 60.0f;
@@ -77,6 +81,7 @@ public:
             setEnvelopeBandwidth(90.0f);
             m_fastA = 1.0f - std::exp(-1.0f / (0.004f * m_fs));
             m_slowA = 1.0f - std::exp(-1.0f / (2.5f * m_fs));
+            m_markA = 1.0f - std::exp(-1.0f / (0.03f * m_fs));
             m_noiseA = 1.0f - std::exp(-1.0f / (0.08f * m_fs));
             m_glitchSamples = std::max(1, static_cast<int>(0.006f * m_fs));
         }
@@ -90,6 +95,7 @@ public:
             m_i1 = m_i2 = m_q1 = m_q2 = 0.0f;
             m_levelInit = 0;
             flushWord(out);
+            m_joiner.flush(out);
         }
         m_lastPitch = pitchHz;
         const double dPhase = 2.0 * 3.14159265358979 * pitchHz / m_fs;
@@ -116,7 +122,11 @@ public:
     }
 
     // Force out whatever word is in progress.
-    void flush(std::string &out) { flushWord(out); }
+    void flush(std::string &out)
+    {
+        flushWord(out);
+        m_joiner.flush(out);
+    }
 
     // Speed from the average of all four learned elements in dot units
     // (PARIS-style), so a sender with long dashes is not over-reported.
@@ -156,8 +166,14 @@ private:
             m_lo += (mag - m_lo) / static_cast<float>(m_levelInit + 1);
             ++m_levelInit;
         }
-        if (mag > m_hi) m_hi += m_fastA * (mag - m_hi);
-        else            m_hi += m_slowA * (mag - m_hi);
+        // While the key is down the signal level follows the mark itself
+        // (~30 ms), so it comes down with QSB; while the key is up it only
+        // decays slowly. A peak-hold level (v51) stayed at the strong-period
+        // value during a fade, the threshold sat above the faded marks and
+        // dits came out short or vanished (real clip 221232).
+        if (mag > m_hi)      m_hi += m_fastA * (mag - m_hi);
+        else if (m_keyDown && m_seeded) m_hi += m_markA * (mag - m_hi);
+        else                 m_hi += m_slowA * (mag - m_hi);
         if (!m_keyDown && mag < m_lo + 0.33f * (m_hi - m_lo)) m_lo += m_noiseA * (mag - m_lo);
 
         m_signalValid = gate && (m_hi > 3.0f * m_lo + 1e-9f);
@@ -186,19 +202,19 @@ private:
         // Word end by timeout while key is up.
         if (!m_keyDown && !m_wordFlushed && !m_marks.empty()) {
             const float upMs = m_stateSamples * m_msPerSample;
-            if (upMs > wordGapThreshold()) {
-                flushWord(out);
-                out.push_back(' ');
-            }
+            if (upMs > wordGapThreshold()) flushWord(out);
+        }
+        // Long silence: nothing can join across it, settle pending words.
+        if (!m_keyDown && m_joiner.pending()
+                && m_stateSamples * m_msPerSample > hardGapThreshold()) {
+            m_joiner.flush(out);
         }
     }
 
     void onMarkEnd(float ms)
     {
         if (ms < 20.0f) return;     // click / noise blip (20 ms = dit at 60 WPM)
-        if (m_seeded && ms < 0.3f * m_dot) {                  // noise spike: merge
-            return;
-        }
+        if (m_seeded && ms < 0.4f * m_dot) return;           // noise blip
         if (ms > 2000.0f) { m_marks.clear(); m_gaps.clear(); return; }   // carrier
         m_marks.push_back(ms);
         m_wordFlushed = false;
@@ -212,35 +228,82 @@ private:
     {
         // A gap between two marks of the same word (word gaps are handled by
         // the timeout in sample()).
-        if (!m_marks.empty() && !m_wordFlushed) m_gaps.push_back(ms);
+        if (!m_marks.empty() && !m_wordFlushed) {
+            m_gaps.push_back(ms);
+        } else if (m_wordFlushed) {
+            m_nextSoft = (ms < hardGapThreshold());
+        }
+        if (m_wordFlushed && m_seeded && ms > wordGapThreshold() && ms < 12.0f * m_dot) {
+            // This gap ended a word: learn the sender's word spacing (many
+            // hand senders use ~5 dits, not the textbook 7).
+            m_wg += 0.2f * (ms - m_wg);
+            m_wg = std::min(12.0f * m_dot, std::max(1.6f * m_lg, m_wg));
+        }
+    }
+
+    // Breaks shorter than this may still be inside a word (joiner decides).
+    float hardGapThreshold() const
+    {
+        return std::max(2.4f * m_lg, 1.3f * wordGapThreshold());
+    }
+
+    // Push a decoded word; '\x01' marks internal split candidates.
+    void pushDecoded(const std::string &t, bool softBefore, std::string &out)
+    {
+        size_t i = 0;
+        bool first = true;
+        while (i <= t.size()) {
+            size_t j = t.find('\x01', i);
+            if (j == std::string::npos) j = t.size();
+            const std::string piece = t.substr(i, j - i);
+            if (!piece.empty()) {
+                m_joiner.push(piece, first ? softBefore : false, out, !first);
+                first = false;
+            }
+            i = j + 1;
+        }
     }
 
     float wordGapThreshold() const
     {
-        return std::max(std::sqrt(m_lg * m_wg), m_lg * 2.0f);
+        return std::max(std::sqrt(m_lg * m_wg), m_lg * 1.45f);
     }
 
     // 2-means on log mark lengths; seeds dot/dash from the actual sender.
+    // Short noise blips are dropped first (anything under 18% of the 75th
+    // percentile mark, i.e. well below a dit even for a 1:4.5 dah ratio);
+    // otherwise a cluster of 20 ms blips can pose as "dits" and the real
+    // dits and dahs get lumped together as "dahs" (seen on real clips).
     void reseed()
     {
+        std::vector<float> sorted(m_markHist);
+        std::sort(sorted.begin(), sorted.end());
+        const float p75 = sorted[(sorted.size() * 3) / 4];
         std::vector<float> l;
-        for (float v : m_markHist) l.push_back(std::log(v));
+        for (float v : m_markHist) if (v >= 0.18f * p75) l.push_back(std::log(v));
+        if (l.size() < 5) return;
         float c0 = *std::min_element(l.begin(), l.end());
         float c1 = *std::max_element(l.begin(), l.end());
-        if (c1 - c0 < std::log(1.6f)) return;   // all one kind so far
-        for (int it = 0; it < 10; ++it) {
+        if (c1 - c0 < std::log(1.8f)) return;   // all one kind so far
+        for (int it = 0; it < 12; ++it) {
             float s0 = 0, s1 = 0; int n0 = 0, n1 = 0;
             const float mid = 0.5f * (c0 + c1);
             for (float v : l) { if (v < mid) { s0 += v; ++n0; } else { s1 += v; ++n1; } }
-            if (n0 == 0 || n1 == 0) return;
+            // Each class needs at least two members: one stray blip must not
+            // become "the dit" while every real element is called a dah.
+            if (n0 < 2 || n1 < 2) return;
             c0 = s0 / n0; c1 = s1 / n1;
         }
         const float dot = std::exp(c0), dash = std::exp(c1);
-        if (dash / dot < 1.6f) return;
-        const float w = m_seeded ? 0.3f : 1.0f;
+        if (dash / dot < 1.8f || dash / dot > 6.0f) return;
+
+        // Gentle correction normally; a full re-seed when the model is far
+        // off (wrong start, or a new station at a different speed).
+        const bool farOff = !m_seeded || dot > 1.5f * m_dot || dot < m_dot / 1.5f;
+        const float w = farOff ? 1.0f : 0.3f;
         m_dot  += w * (dot - m_dot);
         m_dash += w * (dash - m_dash);
-        if (!m_seeded) {
+        if (farOff) {
             m_eg = m_dot;
             m_lg = 0.5f * (m_dash + 3.0f * m_dot);
             m_wg = 7.0f * m_dot;
@@ -253,15 +316,20 @@ private:
     static float sigm(float z) { return 1.0f / (1.0f + std::exp(-z)); }
     static float clampP(float p) { return std::min(0.99f, std::max(0.01f, p)); }
 
+    // Decode the word in progress (and any words held from before the timing
+    // model was seeded) and hand them to the joiner. Settled text -> out.
     void flushWord(std::string &out)
     {
         m_wordFlushed = true;
+        const bool soft = m_nextSoft;
+        m_nextSoft = false;
         const int n = static_cast<int>(m_marks.size());
         if (n == 0) { m_gaps.clear(); return; }
         if (!m_seeded) {
-            // Too early to know dot vs dash: hold the word (a few at most)
-            // and decode it once the timing model is seeded.
-            if (m_held.size() < 6) m_held.push_back({m_marks, m_gaps});
+            // Too early to know dot vs dash: hold the word and decode it once
+            // the timing model is seeded.
+            m_held.push_back({m_marks, m_gaps, soft});
+            if (m_held.size() > 12) m_held.erase(m_held.begin());
             m_marks.clear(); m_gaps.clear();
             return;
         }
@@ -271,12 +339,15 @@ private:
             const std::vector<float> curM = m_marks, curG = m_gaps;
             for (const HeldWord &w : held) {
                 m_marks = w.marks; m_gaps = w.gaps;
-                decodeWord(out);
-                out.push_back(' ');
+                std::string t;
+                decodeWord(t);
+                pushDecoded(t, w.softBefore, out);
             }
             m_marks = curM; m_gaps = curG;
         }
-        decodeWord(out);
+        std::string t;
+        decodeWord(t);
+        pushDecoded(t, soft, out);
     }
 
     void decodeWord(std::string &out)
@@ -336,7 +407,14 @@ private:
             for (int i = n; i > 0; i = from[i]) { picks.push_back(pick[i]); starts.push_back(from[i]); }
             std::reverse(picks.begin(), picks.end());
             std::reverse(starts.begin(), starts.end());
-            for (int c : picks) out += m_table[c].text;
+            // Mark long letter gaps inside the "word" ('\x01') so the joiner
+            // can split there if that reads better (senders whose word gap is
+            // barely longer than their letter gap, real clip 220631).
+            const float splitTh = 1.25f * m_lg;
+            for (size_t p = 0; p < picks.size(); ++p) {
+                if (p > 0 && m_gaps[starts[p] - 1] > splitTh) out.push_back('\x01');
+                out += m_table[picks[p]].text;
+            }
             learn(picks, starts);
         }
 
@@ -364,7 +442,7 @@ private:
         m_dash = std::min(m_dot * 5.0f, std::max(m_dot * 1.8f, m_dash));
         m_eg   = std::min(m_dot * 2.0f, std::max(m_dot * 0.4f, m_eg));
         m_lg   = std::min(m_dot * 6.0f, std::max(m_eg * 1.6f, m_lg));
-        m_wg   = std::max(m_lg * 2.0f, 6.0f * m_dot);
+        m_wg   = std::min(12.0f * m_dot, std::max(1.6f * m_lg, m_wg));
     }
 
     // ---- character table ---------------------------------------------------
@@ -413,7 +491,7 @@ private:
     int    m_decimCount = 0;
     double m_phase = 0.0;
     float  m_lpFc = 0.0f;
-    float  m_lpA = 0.0f, m_fastA = 0.0f, m_slowA = 0.0f, m_noiseA = 0.0f;
+    float  m_lpA = 0.0f, m_fastA = 0.0f, m_slowA = 0.0f, m_noiseA = 0.0f, m_markA = 0.0f;
     float  m_i1 = 0, m_i2 = 0, m_q1 = 0, m_q2 = 0;
     float  m_hi = 0, m_lo = 0;
     int    m_levelInit = 0;
@@ -430,8 +508,10 @@ private:
     std::vector<float> m_marks;
     std::vector<float> m_gaps;
     std::vector<float> m_markHist;
-    struct HeldWord { std::vector<float> marks, gaps; };
+    struct HeldWord { std::vector<float> marks, gaps; bool softBefore; };
     std::vector<HeldWord> m_held;
+    Ic7610CwWordJoiner m_joiner;
+    bool m_nextSoft = false;
 
     // timing model (ms)
     float m_dot = 60.0f, m_dash = 180.0f, m_eg = 60.0f, m_lg = 180.0f, m_wg = 420.0f;

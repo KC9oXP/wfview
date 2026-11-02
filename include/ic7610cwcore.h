@@ -203,7 +203,9 @@ public:
     // Tuning constants (public so the offline test can print them).
     static constexpr float kBlockSec      = 0.25f;  // tracker analysis block
     static constexpr float kStepHz        = 5.0f;   // tracker bin spacing
-    static constexpr float kLockSnrDb     = 9.0f;   // tone must beat median by this
+    static constexpr float kLockSnrDb     = 7.0f;   // tone must beat median by this
+                                                    // (9 dB in v50-v52; 7 dB copies weak clip
+                                                    // 220759 and the noise-only test stays silent)
     static constexpr float kNearHz        = 30.0f;  // within this: slew, no re-lock
     static constexpr int   kMoveBlocks    = 4;      // new peak must persist (x 0.25 s)
     static constexpr float kSquelchHoldSec = 2.0f;  // keep squelch open after tone fades
