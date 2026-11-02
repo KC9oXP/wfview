@@ -7,3 +7,4 @@ Upstream base: wfview dcd2c49. Build scripts are in build-scripts\.
 |---|---|---|
 | v51 | 2026-11-01 21:56 |  |
 | v53 | 2026-11-01 22:28 | Better CW Decoder |
+| v54 | 2026-11-01 23:07 | improved cw decode, now has multiline decode |

@@ -210,12 +210,13 @@ if (-not $releaseOnly) {
             Info "Repo is a shallow clone - fetching full upstream history (one time) ..."
             Git-Ok fetch --unshallow origin | Out-Null
         }
-        # Same settings the first GitLab push needed.
+        # Same settings the first GitLab push needed. ci.skip: the upstream
+        # .gitlab-ci.yml (wfview's GitHub mirror job) must not run here.
         Git-Ok config http.version HTTP/1.1 | Out-Null
         Git-Ok config http.postBuffer 524288000 | Out-Null
-        Write-Host (Git-Ok push -u $RemoteName $Branch)
-        if ($Force) { Write-Host (Git-Ok push --force $RemoteName "refs/tags/$Tag") }
-        else { Write-Host (Git-Ok push $RemoteName "refs/tags/$Tag") }
+        Write-Host (Git-Ok push -o ci.skip -u $RemoteName $Branch)
+        if ($Force) { Write-Host (Git-Ok push -o ci.skip --force $RemoteName "refs/tags/$Tag") }
+        else { Write-Host (Git-Ok push -o ci.skip $RemoteName "refs/tags/$Tag") }
         Info "Pushed $Branch and $Tag."
     }
 }

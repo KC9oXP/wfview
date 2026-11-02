@@ -55,6 +55,7 @@ public:
         m_held.clear();
         m_joiner.reset();
         m_nextSoft = false;
+        m_gapCarry = 0.0f;
         m_dot = 60.0f;
         m_dash = 180.0f;
         m_eg = 60.0f;
@@ -213,8 +214,18 @@ private:
 
     void onMarkEnd(float ms)
     {
-        if (ms < 20.0f) return;     // click / noise blip (20 ms = dit at 60 WPM)
-        if (m_seeded && ms < 0.4f * m_dot) return;           // noise blip
+        // Click / noise blip (20 ms = dit at 60 WPM, or well under a dit).
+        // v54: fold it back into the gap it interrupted. v53 dropped the mark
+        // but kept both gaps around it, so marks and gaps went out of step
+        // and the rest of the word decoded as junk (clip 224048).
+        if (ms < 20.0f || (m_seeded && ms < 0.4f * m_dot)) {
+            if (!m_marks.empty() && !m_wordFlushed && !m_gaps.empty()
+                    && m_gaps.size() == m_marks.size()) {
+                m_gapCarry += m_gaps.back() + ms;
+                m_gaps.pop_back();
+            }
+            return;
+        }
         if (ms > 2000.0f) { m_marks.clear(); m_gaps.clear(); return; }   // carrier
         m_marks.push_back(ms);
         m_wordFlushed = false;
@@ -228,6 +239,8 @@ private:
     {
         // A gap between two marks of the same word (word gaps are handled by
         // the timeout in sample()).
+        ms += m_gapCarry;
+        m_gapCarry = 0.0f;
         if (!m_marks.empty() && !m_wordFlushed) {
             m_gaps.push_back(ms);
         } else if (m_wordFlushed) {
@@ -321,6 +334,7 @@ private:
     void flushWord(std::string &out)
     {
         m_wordFlushed = true;
+        m_gapCarry = 0.0f;
         const bool soft = m_nextSoft;
         m_nextSoft = false;
         const int n = static_cast<int>(m_marks.size());
@@ -512,6 +526,7 @@ private:
     std::vector<HeldWord> m_held;
     Ic7610CwWordJoiner m_joiner;
     bool m_nextSoft = false;
+    float m_gapCarry = 0.0f;   // gap + blip carried into the next gap
 
     // timing model (ms)
     float m_dot = 60.0f, m_dash = 180.0f, m_eg = 60.0f, m_lg = 180.0f, m_wg = 420.0f;
