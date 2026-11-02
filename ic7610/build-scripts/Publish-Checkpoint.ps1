@@ -77,6 +77,12 @@ $ExtraDir    = Join-Path $script:Repo "ic7610"
 $Stamp       = Get-Date -Format "yyyy-MM-dd HH:mm"
 if ($DryRun) { Write-Host "DRY RUN - nothing will be changed or pushed." -ForegroundColor Yellow }
 
+# Ask for the checkpoint message when it was not given on the command line.
+if (-not $PSBoundParameters.ContainsKey("Message")) {
+    $Message = Read-Host ("Message for v" + $Version + " (what changed; Enter for none)")
+}
+$Message = ($Message -replace "[|\r\n]", " ").Trim()
+
 # ---------------------------------------------------------------- checks
 Step "Checks"
 if (-not (Get-Command git.exe -ErrorAction SilentlyContinue)) { Fail "git.exe is not on PATH." }
@@ -199,6 +205,11 @@ if (-not $releaseOnly) {
     if ($DryRun -or $NoPush) {
         Info "Skipping push (DryRun/NoPush). Would push $Branch and $Tag."
     } else {
+        # A shallow upstream clone cannot be pushed to GitLab; fetch the full history once.
+        if (Test-Path (Join-Path $script:Repo ".git\shallow")) {
+            Info "Repo is a shallow clone - fetching full upstream history (one time) ..."
+            Git-Ok fetch --unshallow origin | Out-Null
+        }
         # Same settings the first GitLab push needed.
         Git-Ok config http.version HTTP/1.1 | Out-Null
         Git-Ok config http.postBuffer 524288000 | Out-Null
