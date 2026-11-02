@@ -8,3 +8,4 @@ Upstream base: wfview 0985685 (GitHub wf-group/wfview master, v2.25). Build scri
 | v51 | 2026-11-01 21:56 |  |
 | v53 | 2026-11-01 22:28 | Better CW Decoder |
 | v54 | 2026-11-01 23:07 | improved cw decode, now has multiline decode |
+| v55 | 2026-11-01 23:42 | v54 rebuilt on upstream wfview 2.25 |
