@@ -937,11 +937,12 @@ void SettingsController::load()
     qInfo(logSystem()) << "Loading settings from " << settings->fileName();
 
     QString currentVersionString = QString(WFVIEW_VERSION);
-    float currentVersionFloat = currentVersionString.toFloat();
+    // IC-7610 builds are numbered 3.00.NNN: compare on "major.minor" only.
+    float currentVersionFloat = currentVersionString.section('.', 0, 1).toFloat();
 
     settings->beginGroup("Program");
     QString priorVersionString = settings->value("version", "unset").toString();
-    float priorVersionFloat = priorVersionString.toFloat();
+    float priorVersionFloat = priorVersionString.section('.', 0, 1).toFloat();
     if (currentVersionString != priorVersionString)
     {
         qWarning(logSystem()) << "Settings previously saved under version " << priorVersionString << ", you should review your settings and press SaveSettings.";
@@ -1806,7 +1807,7 @@ void SettingsController::save()
     QString versionstr = QString(WFVIEW_VERSION);
     QString majorVersion = "-1";
     QString minorVersion = "-1";
-    if(versionstr.contains(".") && (versionstr.split(".").length() == 2))
+    if(versionstr.contains(".") && (versionstr.split(".").length() >= 2))
     {
         majorVersion = versionstr.split(".").at(0);
         minorVersion = versionstr.split(".").at(1);
@@ -2446,11 +2447,11 @@ void SettingsController::setDefPrefs()
     defPrefs.virtualSerialPortUseQueue = false;
     defPrefs.localAFgain = 255;
     defPrefs.mainWflength = 160;
-    defPrefs.mainWfTheme = static_cast<int>(WaterfallItem::Theme::Jet);
+    defPrefs.mainWfTheme = static_cast<int>(WaterfallItem::Theme::Night);
     defPrefs.mainPlotFloor = 0;
     defPrefs.mainPlotCeiling = 160;
     defPrefs.subWflength = 160;
-    defPrefs.subWfTheme = static_cast<int>(WaterfallItem::Theme::Jet);
+    defPrefs.subWfTheme = static_cast<int>(WaterfallItem::Theme::Night);
     defPrefs.subPlotFloor = 0;
     defPrefs.subPlotCeiling = 160;
     defPrefs.scopeScrollX = 120;

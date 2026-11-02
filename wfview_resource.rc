@@ -3,8 +3,8 @@
 IDI_ICON1	ICON	"C:\\Users\\phil.taylor\\source\\repos\\wfview\\resources\\icons\\Windows\\wfview 512x512.ico"
 
 VS_VERSION_INFO VERSIONINFO
-	FILEVERSION 0,0,0,0
-	PRODUCTVERSION 0,0,0,0
+	FILEVERSION 3,0,1,0
+	PRODUCTVERSION 3,0,1,0
 	FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
 	FILEFLAGS VS_FF_DEBUG
@@ -21,11 +21,11 @@ VS_VERSION_INFO VERSIONINFO
 			BEGIN
 				VALUE "CompanyName", "\0"
 				VALUE "FileDescription", "\0"
-				VALUE "FileVersion", "0.0.0.0\0"
+				VALUE "FileVersion", "3.0.1.0\0"
 				VALUE "LegalCopyright", "\0"
 				VALUE "OriginalFilename", "wfview.exe\0"
 				VALUE "ProductName", "wfview\0"
-				VALUE "ProductVersion", "0.0.0.0\0"
+				VALUE "ProductVersion", "3.0.1.0\0"
 				VALUE "InternalName", "\0"
 				VALUE "Comments", "\0"
 				VALUE "LegalTrademarks", "\0"
