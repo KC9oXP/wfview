@@ -105,6 +105,8 @@ public:
     void setFreqLock( bool en) { freqLock = en; }
     void setRoofing(uchar val);
     void setFilterShape(uchar val);
+    // IC7610_V23_HEADER_PUBLIC
+    void setIC7610AGC(uchar value);
     void setScopeEnabled(bool en) { this->configScopeEnabled->setEnabled(en);};
 
     void setBandIndicators(bool show, QString region, std::vector<bandType>* bands);
@@ -157,6 +159,8 @@ signals:
     void waterfallTime(double time);
     void sendScopeImage(uchar receiver);
     void sendTrack(int f);
+    // IC7610_V23_HEADER_SIGNAL
+    void requestIC7610Ext(uchar receiver);
 
 private slots:
     void detachScope(bool state);
@@ -231,6 +235,10 @@ private:
     QComboBox* dataCombo;
     QComboBox* filterCombo;
     QComboBox* filterShapeCombo;
+    // IC7610_V23_HEADER_MEMBERS
+    QLabel* ic7610AgcLabel = Q_NULLPTR;
+    QComboBox* ic7610AgcCombo = Q_NULLPTR;
+    QPushButton* ic7610ExtButton = Q_NULLPTR;
     QComboBox* roofingCombo;
     QComboBox* antennaCombo;
     QPushButton* holdButton;

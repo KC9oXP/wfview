@@ -373,7 +373,34 @@ funcLoginEnableDisable,
 funcSelectVFO,          funcSeparator,          funcLCDWaterfall,           funcLCDSpectrum,        funcLCDNothing,         funcPageUp,
 funcPageDown,           funcVFOFrequency,       funcVFOMode,                funcRigctlFunction,     funcRigctlLevel,        funcRigctlParam,
 funcRXAudio,            funcTXAudio,
+    // IC7610_V27_FUNCS
+    funcACCOutputSelect,     funcACCAFOutputLevel,   funcACCIFOutputLevel,
+    funcUSBOutputSelect,     funcUSBAFOutputLevel,   funcUSBIFOutputLevel,
+    funcLANOutputSelect,     funcREFInput,
 // This MUST be the last defined func.
+    // IC7610_V37_FUNCS
+    func7610CIVTimeout,
+    func7610RTTYMarkFreq,       func7610RTTYShiftWidth,     func7610RTTYKeyPolarity,
+    func7610SSBCWSyncTune,      func7610CWNormalSide,
+    func7610USBKeyCW,           func7610USBKeyRTTY,
+    func7610CIVRemoteAddress,   func7610CIVUSBPort,         func7610CIVUSBEcho,
+    func7610SideToneLevel,      func7610SideToneLimit,      func7610KeyerRepeat,
+    func7610CWRiseTime,         func7610PaddlePolarity,     func7610KeyType,
+    func7610MicUpDownKeyer,
+    // IC7610_V39_RTTY_FUNCS
+    func7610ExternalKeypadRTTY,
+    func7610DecodeBaud,
+    func7610RTTYFFTAverage,
+    func7610RTTYDecodeUSOS,
+    func7610RTTYNewLine,
+    func7610RTTYDiddle,
+    func7610RTTYTXUSOS,
+    func7610RTTYAutoCRLF,
+    func7610RTTYTimestamp,
+    func7610RTTYTimestampTime,
+    func7610RTTYTimestampFreq,
+    func7610RTTYDecodeLog,
+    func7610RTTYLogFileType,
 funcLastFunc
 };
 
@@ -515,6 +542,34 @@ static QString funcString[funcLastFunc] { "None",
 "-Select VFO",          "-Seperator",
 "-LCD Waterfall",       "-LCD Spectrum",        "-LCD Nothing",             "-Page Up",             "-Page Down",           "-VFO Frequency",
 "-VFO Mode",            "-Rigctl Function",     "-Rigctl Level",            "-Rigctl Param",        "-RX Audio Data",       "-TX Audio Data"
+// IC7610_V27_FUNCSTRINGS
+,
+"ACC Output Select",     "ACC AF Output Level",   "ACC IF Output Level",
+"USB Output Select",     "USB AF Output Level",   "USB IF Output Level",
+"LAN Output Select",     "REF IN"
+    // IC7610_V37_FUNCSTRINGS
+    ,"7610 CI-V Timeout",
+    "7610 RTTY Mark Frequency", "7610 RTTY Shift Width", "7610 RTTY Keying Polarity",
+    "7610 SSB/CW Sync Tuning", "7610 CW Normal Side",
+    "7610 USB Keying CW", "7610 USB Keying RTTY",
+    "7610 CI-V Remote Address", "7610 CI-V USB Port", "7610 CI-V USB Echo Back",
+    "7610 CW Side Tone Level", "7610 CW Side Tone Limit", "7610 Keyer Repeat",
+    "7610 CW Rise Time", "7610 Paddle Polarity", "7610 Key Type",
+    "7610 MIC Up/Down Keyer"
+    // IC7610_V39_RTTY_FUNCSTRINGS
+    ,"7610 External Keypad RTTY",
+    "7610 Decode Baud Rate",
+    "7610 RTTY FFT Scope Averaging",
+    "7610 RTTY Decode USOS",
+    "7610 RTTY Decode New Line",
+    "7610 RTTY Diddle",
+    "7610 RTTY TX USOS",
+    "7610 RTTY Auto CRLF",
+    "7610 RTTY Time Stamp",
+    "7610 RTTY Time Stamp Time",
+    "7610 RTTY Time Stamp Frequency",
+    "7610 RTTY Decode Log",
+    "7610 RTTY Log File Type"
 };
 
 struct spanType {

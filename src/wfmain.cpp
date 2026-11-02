@@ -1,6 +1,29 @@
 #include "wfmain.h"
 #include "icomserver.h"
 #include "ui_wfmain.h"
+#include "ic7610cwdecoder.h"   // IC7610_V49_CW_DECODER
+#include <QDialog>
+#include <QFormLayout>
+#include <QSpinBox>
+#include <QComboBox>
+#include <QPushButton>
+#include <QCheckBox>
+#include <QLabel>
+#include <QTabWidget>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QDialog>
+#include <QFormLayout>
+#include <QSpinBox>
+#include <QScrollArea>
+#include <QProgressBar> // IC7610_V27_PROGRESS_INCLUDE
+#include <QComboBox>
+#include <QPushButton>
+#include <QCheckBox>
+#include <QLabel>
+#include <QTabWidget>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
 
 #include "rigidentities.h"
 #include "logcategories.h"
@@ -37,9 +60,50 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     this->debugMode = debugMode;
     debugModeLogging = debugMode;
     ui->setupUi(this);
+    // IC7610_V33_OEM_METER_SCALING
+    // The .ui gives the three stock meters a Preferred horizontal policy.
+    // Make them consume the width of the meter column instead of remaining
+    // near their 280 px size hint as the main window grows.
+    ui->meterSPoWidget->setSizePolicy(
+            QSizePolicy::Expanding, QSizePolicy::Fixed);
+    ui->meter2Widget->setSizePolicy(
+            QSizePolicy::Expanding, QSizePolicy::Fixed);
+    ui->meter3Widget->setSizePolicy(
+            QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+    ui->meterSPoWidget->setMinimumWidth(280);
+    ui->meter2Widget->setMinimumWidth(280);
+    ui->meter3Widget->setMinimumWidth(280);
+    // Let the stock meters grow enough to be easy to read, but do not allow
+    // the old 255-unit artwork to become a giant horizontally stretched banner.
+    ui->meterSPoWidget->setMaximumWidth(620);
+    ui->meter2Widget->setMaximumWidth(620);
+    ui->meter3Widget->setMaximumWidth(620);
+
+    // Give the meter column the spare horizontal space while leaving the
+    // tuning/control columns at their natural sizes.
+    ui->horizontalLayout_2->setStretch(0, 0); // IC7610_V36_OEM_WIDTH_CAP
+    ui->horizontalLayout_2->setStretch(1, 0);
+    ui->horizontalLayout_2->setStretch(2, 0);
     setWindowTitle(QString("wfview"));
 
     ui->monitorLabel->setText("Mon");
+    // IC7610_V37_POWER_BUTTONS
+    // Match the compact visual weight of the Vd/Id meter pair.
+    ui->rigPowerOnBtn->setMinimumWidth(100);
+    ui->rigPowerOnBtn->setMaximumWidth(260);
+    ui->rigPowerOnBtn->setSizePolicy(
+            QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+    ui->rigPowerOffBtn->setMinimumWidth(100);
+    ui->rigPowerOffBtn->setMaximumWidth(260);
+    ui->rigPowerOffBtn->setSizePolicy(
+            QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+    ui->horizontalLayout_27->setSpacing(4);
+    ui->horizontalLayout_27->setStretch(0, 1);
+    ui->horizontalLayout_27->setStretch(1, 1);
+    ui->horizontalLayout_27->addStretch(1);
 
     // Accessibility: the operating buttons are NoFocus in the .ui so the tuning
     // controls keep keyboard focus. That leaves keyboard-only and VoiceOver
@@ -953,6 +1017,1341 @@ void wfmain::setupMainUI()
     ui->tuneLockChk->setChecked(false);
     freqLock = false;
 
+    QComboBox *agcSelCombo = new QComboBox(ui->OtherControlsGrp);
+    agcSelCombo->setObjectName(QStringLiteral("agcSelCombo"));
+    agcSelCombo->setEnabled(false);
+    agcSelCombo->setMinimumWidth(68);
+    agcSelCombo->setToolTip(tr("Automatic Gain Control: FAST, MID, or SLOW"));
+    agcSelCombo->setAccessibleName(tr("Automatic Gain Control"));
+
+    // IC-7610 AGC control: add a third row to "Other Controls".
+// IC-7610 AGC control: add a third row to "Other Controls".
+// IC-7610 AGC control: add a third row to "Other Controls".
+// IC-7610 AGC control: add a third row to "Other Controls".
+// IC-7610 AGC control: add a third row to "Other Controls".
+// IC-7610 AGC control: add a third row to "Other Controls".
+// IC-7610 AGC control: add a third row to "Other Controls".
+// v16: AGC lives on the stock upper Other Controls row: NB / NR / IP+.
+    QLabel *agcLabel = new QLabel(tr("AGC"), ui->OtherControlsGrp);
+    agcLabel->setToolTip(tr("Automatic Gain Control speed"));
+    agcSelCombo->setMinimumWidth(68);
+    agcSelCombo->setMaximumWidth(90);
+
+    ui->horizontalLayout_6->addSpacing(6);
+    ui->horizontalLayout_6->addWidget(agcLabel);
+    ui->horizontalLayout_6->addWidget(agcSelCombo);
+    // IC7610_V32_VA_ROW
+    QWidget *ic7610VaMeterRow = new QWidget(ui->mainGroup);
+    ic7610VaMeterRow->setObjectName(QStringLiteral("ic7610VaMeterRow"));
+    ic7610VaMeterRow->setMinimumHeight(24);
+    ic7610VaMeterRow->setMaximumHeight(30);
+
+    QHBoxLayout *ic7610VaLayout = new QHBoxLayout(ic7610VaMeterRow);
+    ic7610VaLayout->setContentsMargins(2, 0, 2, 0);
+    ic7610VaLayout->setSpacing(4);
+
+    QLabel *ic7610VdLabel = new QLabel(tr("Vd"), ic7610VaMeterRow);
+    ic7610VdLabel->setObjectName(QStringLiteral("ic7610VdLabel"));
+    ic7610VdLabel->setMinimumWidth(20);
+    ic7610VdLabel->setMaximumWidth(24);
+    ic7610VdLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    ic7610VaLayout->addWidget(ic7610VdLabel);
+
+    QProgressBar *ic7610VdBar = new QProgressBar(ic7610VaMeterRow);
+    ic7610VdBar->setObjectName(QStringLiteral("ic7610VdBar"));
+    ic7610VdBar->setRange(100, 160);
+    ic7610VdBar->setValue(100);
+    ic7610VdBar->setTextVisible(false);
+    ic7610VdBar->setMinimumWidth(100);
+    ic7610VdBar->setMaximumWidth(260);
+    ic7610VdBar->setMinimumHeight(12);
+    ic7610VdBar->setMaximumHeight(16);
+    ic7610VdBar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    ic7610VdBar->setToolTip(tr("IC-7610 supply voltage, 10.0 to 16.0 V"));
+    ic7610VaLayout->addWidget(ic7610VdBar, 1);
+
+    QLabel *ic7610VdText = new QLabel(tr("--.- V"), ic7610VaMeterRow);
+    ic7610VdText->setObjectName(QStringLiteral("ic7610VdText"));
+    ic7610VdText->setMinimumWidth(56);
+    ic7610VdText->setMaximumWidth(64);
+    ic7610VdText->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    ic7610VaLayout->addWidget(ic7610VdText);
+
+    ic7610VaLayout->addSpacing(8);
+
+    QLabel *ic7610IdLabel = new QLabel(tr("Id"), ic7610VaMeterRow);
+    ic7610IdLabel->setObjectName(QStringLiteral("ic7610IdLabel"));
+    ic7610IdLabel->setMinimumWidth(18);
+    ic7610IdLabel->setMaximumWidth(22);
+    ic7610IdLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    ic7610VaLayout->addWidget(ic7610IdLabel);
+
+    QProgressBar *ic7610IdBar = new QProgressBar(ic7610VaMeterRow);
+    ic7610IdBar->setObjectName(QStringLiteral("ic7610IdBar"));
+    ic7610IdBar->setRange(0, 300);
+    ic7610IdBar->setValue(0);
+    ic7610IdBar->setTextVisible(false);
+    ic7610IdBar->setMinimumWidth(100);
+    ic7610IdBar->setMaximumWidth(260);
+    ic7610IdBar->setMinimumHeight(12);
+    ic7610IdBar->setMaximumHeight(16);
+    ic7610IdBar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    ic7610IdBar->setToolTip(tr("IC-7610 drain current, 0 to 30 A"));
+    ic7610VaLayout->addWidget(ic7610IdBar, 1);
+
+    QLabel *ic7610IdText = new QLabel(tr("--.- A"), ic7610VaMeterRow);
+    ic7610IdText->setObjectName(QStringLiteral("ic7610IdText"));
+    ic7610IdText->setMinimumWidth(56);
+    ic7610IdText->setMaximumWidth(64);
+    ic7610IdText->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    ic7610VaLayout->addWidget(ic7610IdText);
+
+    // Keep the pair compact on very wide main windows.
+    ic7610VaLayout->addStretch(1);
+
+    ui->meterLayout->addWidget(ic7610VaMeterRow);
+    // IC7610_V23_HIDE_LEGACY
+    agcLabel->setVisible(false);
+    agcSelCombo->setVisible(false);
+// IC7610_EXT_DIALOG_BEGIN
+    QPushButton *ext7610Btn = new QPushButton(tr("7610 EXT"), ui->OtherControlsGrp);
+    ext7610Btn->setObjectName(QStringLiteral("ext7610Btn"));
+    ext7610Btn->setToolTip(tr("Open IC-7610 extended radio controls"));
+    ext7610Btn->setEnabled(false);
+    ext7610Btn->setVisible(false);
+    ui->horizontalLayout_6->addWidget(ext7610Btn);
+
+    // IC7610_V49_CW_DECODER_BTN
+    {
+        // IC7610_V50_CW_BTN_BOTTOM_ROW
+        // Bottom button row, right after "RX Audio Proc". Not inside
+        // OtherControlsGrp, so it stays enabled while disconnected.
+        QPushButton *cwDecodeBtn = new QPushButton(tr("CW Decode"),
+                                                   ui->RXaudioProcBtn->parentWidget());
+        cwDecodeBtn->setObjectName(QStringLiteral("ic7610CwDecodeBtn"));
+        cwDecodeBtn->setToolTip(tr("Open the CW (Morse) decoder"));
+        cwDecodeBtn->setSizePolicy(ui->RXaudioProcBtn->sizePolicy());
+        {
+            const int rxProcIdx = ui->horizontalLayout_16->indexOf(ui->RXaudioProcBtn);
+            if (rxProcIdx >= 0)
+                ui->horizontalLayout_16->insertWidget(rxProcIdx + 1, cwDecodeBtn);
+            else
+                ui->horizontalLayout_16->addWidget(cwDecodeBtn);
+        }
+        connect(cwDecodeBtn, &QPushButton::clicked, this, [this]() {
+            auto *win = findChild<Ic7610CwDecoderWindow*>(
+                    QStringLiteral("ic7610CwDecoderWin"), Qt::FindDirectChildrenOnly);
+            if (!win) {
+                win = new Ic7610CwDecoderWindow(rxProc, this);
+                win->setObjectName(QStringLiteral("ic7610CwDecoderWin"));
+                connect(win, &Ic7610CwDecoderWindow::radioPitchRequested, this, [this]() {
+                    if (queue != Q_NULLPTR && connStatus == connConnected)
+                        queue->add(priorityImmediate, funcCwPitch, false, false);
+                });
+            } else {
+                win->setRxProcessor(rxProc);
+            }
+            win->show();
+            win->raise();
+            win->activateWindow();
+        });
+    }
+
+    QDialog *ext7610Dialog = new QDialog(this);
+    ext7610Dialog->setObjectName(QStringLiteral("ext7610Dialog"));
+    ext7610Dialog->setWindowTitle(tr("IC-7610 Extended Controls"));
+    ext7610Dialog->setModal(false);
+    ext7610Dialog->setMinimumSize(560, 430);
+    ext7610Dialog->resize(760, 640);
+
+    QVBoxLayout *extRootLayout = new QVBoxLayout(ext7610Dialog);
+
+    QLabel *ext7610ReceiverLabel = new QLabel(tr("Receiver: MAIN"), ext7610Dialog);
+    ext7610ReceiverLabel->setObjectName(QStringLiteral("ext7610ReceiverLabel"));
+    extRootLayout->addWidget(ext7610ReceiverLabel);
+
+    QLabel *ext7610HintLabel = new QLabel(
+        tr("Values are read from the radio on connect/open/refresh. "
+           "Documented controls use radio/front-panel scales; fields still marked raw are CI-V values whose engineering scale is not documented."),
+        ext7610Dialog);
+    ext7610HintLabel->setWordWrap(true);
+    extRootLayout->addWidget(ext7610HintLabel);
+
+    QTabWidget *ext7610Tabs = new QTabWidget(ext7610Dialog);
+    ext7610Tabs->setObjectName(QStringLiteral("ext7610Tabs"));
+    extRootLayout->addWidget(ext7610Tabs);
+
+    auto extMakeSpin = [=](const char *name, int minimum, int maximum, bool raw) -> QSpinBox* {
+        QSpinBox *w = new QSpinBox(ext7610Dialog);
+        w->setObjectName(QString::fromLatin1(name));
+        w->setRange(minimum, maximum);
+        w->setEnabled(false);
+        if (raw)
+            w->setSuffix(tr(" raw"));
+        return w;
+    };
+
+    auto extMakeCheck = [=](const char *name) -> QCheckBox* {
+        QCheckBox *w = new QCheckBox(tr("ON"), ext7610Dialog);
+        w->setObjectName(QString::fromLatin1(name));
+        w->setEnabled(false);
+        return w;
+    };
+
+    // ---------------- RX / DSP tab ----------------
+    QWidget *extRxPage = new QWidget();
+    QFormLayout *extRxForm = new QFormLayout(extRxPage);
+    extRxForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+
+    QScrollArea *extRxScroll = new QScrollArea(ext7610Tabs);
+    extRxScroll->setObjectName(QStringLiteral("extRxScroll"));
+    extRxScroll->setWidgetResizable(true);
+    extRxScroll->setFrameShape(QFrame::NoFrame);
+    extRxScroll->setWidget(extRxPage);
+    ext7610Tabs->addTab(extRxScroll, tr("RX / DSP"));
+
+    QComboBox *agcTcCombo = new QComboBox(ext7610Dialog);
+    agcTcCombo->setObjectName(QStringLiteral("agcTcCombo"));
+    agcTcCombo->setEnabled(false);
+    agcTcCombo->addItem(tr("0 - OFF"), 0);
+    agcTcCombo->addItem(tr("1 - 0.1 s"), 1);
+    agcTcCombo->addItem(tr("2 - 0.2 s"), 2);
+    agcTcCombo->addItem(tr("3 - 0.3 s"), 3);
+    agcTcCombo->addItem(tr("4 - 0.5 s"), 4);
+    agcTcCombo->addItem(tr("5 - 0.8 s"), 5);
+    agcTcCombo->addItem(tr("6 - 1.2 s"), 6);
+    agcTcCombo->addItem(tr("7 - 1.6 s"), 7);
+    agcTcCombo->addItem(tr("8 - 2.0 s"), 8);
+    agcTcCombo->addItem(tr("9 - 2.5 s"), 9);
+    agcTcCombo->addItem(tr("10 - 3.0 s"), 10);
+    agcTcCombo->addItem(tr("11 - 4.0 s"), 11);
+    agcTcCombo->addItem(tr("12 - 5.0 s"), 12);
+    agcTcCombo->addItem(tr("13 - 6.0 s"), 13);
+    agcTcCombo->setCurrentIndex(-1);
+    agcTcCombo->setToolTip(tr("SSB/CW/RTTY/PSK time shown; AM uses longer times for the same index."));
+    extRxForm->addRow(tr("AGC Time Constant"), agcTcCombo);
+
+    QComboBox *apfModeCombo = new QComboBox(ext7610Dialog);
+    apfModeCombo->setObjectName(QStringLiteral("apfModeCombo"));
+    apfModeCombo->setEnabled(false);
+    apfModeCombo->addItem(tr("OFF"), 0);
+    apfModeCombo->addItem(tr("WIDE"), 1);
+    apfModeCombo->addItem(tr("MID"), 2);
+    apfModeCombo->addItem(tr("NAR"), 3);
+    apfModeCombo->setCurrentIndex(-1);
+    extRxForm->addRow(tr("APF Mode / Width"), apfModeCombo);
+
+    QSpinBox *apfPositionSpin = extMakeSpin("apfPositionSpin", -550, 550, false);
+    apfPositionSpin->setSingleStep(10);
+    apfPositionSpin->setSuffix(tr(" Hz"));
+    extRxForm->addRow(tr("APF Position"), apfPositionSpin);
+
+    QComboBox *apfTypeCombo = new QComboBox(ext7610Dialog);
+    apfTypeCombo->setObjectName(QStringLiteral("apfTypeCombo"));
+    apfTypeCombo->setEnabled(false);
+    apfTypeCombo->addItem(tr("SHARP"), 0);
+    apfTypeCombo->addItem(tr("SOFT"), 1);
+    apfTypeCombo->setCurrentIndex(-1);
+    extRxForm->addRow(tr("APF Type"), apfTypeCombo);
+
+    QSpinBox *apfAfLevelSpin = extMakeSpin("apfAfLevelSpin", 0, 6, false);
+    apfAfLevelSpin->setSuffix(tr(" dB"));
+    extRxForm->addRow(tr("APF AF Level"), apfAfLevelSpin);
+
+    QSpinBox *nrLevelSpin = extMakeSpin("nrLevelSpin", 0, 15, false);
+    extRxForm->addRow(tr("NR Level"), nrLevelSpin);
+
+    QSpinBox *nbLevelSpin = extMakeSpin("nbLevelSpin", 0, 100, false);
+    nbLevelSpin->setSuffix(tr("%"));
+    extRxForm->addRow(tr("NB Level"), nbLevelSpin);
+
+    QSpinBox *nbDepthSpin = extMakeSpin("nbDepthSpin", 1, 10, false);
+    nbDepthSpin->setToolTip(tr("CI-V 0..9 corresponds to radio NB Depth 1..10."));
+    extRxForm->addRow(tr("NB Depth"), nbDepthSpin);
+
+    QSpinBox *nbWidthSpin = extMakeSpin("nbWidthSpin", 1, 100, false);
+    nbWidthSpin->setToolTip(tr("Displayed as the IC-7610 front-panel 1..100 scale; CI-V transport is 0..255."));
+    extRxForm->addRow(tr("NB Width"), nbWidthSpin);
+
+    QCheckBox *autoNotchChk = extMakeCheck("autoNotchChk");
+    extRxForm->addRow(tr("Auto Notch"), autoNotchChk);
+
+    QCheckBox *manualNotchChk = extMakeCheck("manualNotchChk");
+    extRxForm->addRow(tr("Manual Notch"), manualNotchChk);
+
+    // IC7610_V23_NOTCH_SCALE
+    QSpinBox *notchPositionSpin = extMakeSpin("notchPositionSpin", -100, 100, false);
+    notchPositionSpin->setSuffix(tr("%"));
+    extRxForm->addRow(tr("Manual Notch Position"), notchPositionSpin);
+
+    QComboBox *manualNotchWidthCombo = new QComboBox(ext7610Dialog);
+    manualNotchWidthCombo->setObjectName(QStringLiteral("manualNotchWidthCombo"));
+    manualNotchWidthCombo->setEnabled(false);
+    manualNotchWidthCombo->addItem(tr("WIDE"), 0);
+    manualNotchWidthCombo->addItem(tr("MID"), 1);
+    manualNotchWidthCombo->addItem(tr("NAR"), 2);
+    manualNotchWidthCombo->setCurrentIndex(-1);
+    extRxForm->addRow(tr("Manual Notch Width"), manualNotchWidthCombo);
+
+    QCheckBox *afMuteChk = extMakeCheck("afMuteChk");
+    extRxForm->addRow(tr("AF Mute"), afMuteChk);
+
+    // IC7610_V23_DIGISEL_SCALE
+    QSpinBox *digiSelShiftSpin = extMakeSpin("digiSelShiftSpin", -100, 100, false);
+    digiSelShiftSpin->setSuffix(tr("%"));
+    extRxForm->addRow(tr("DIGI-SEL Shift"), digiSelShiftSpin);
+
+    QCheckBox *twinPeakChk = extMakeCheck("twinPeakChk");
+    twinPeakChk->setToolTip(tr("IC-7610 only allows Twin Peak in the valid RTTY Mark/Shift condition."));
+    extRxForm->addRow(tr("Twin Peak Filter"), twinPeakChk);
+
+    // ---------------- TX / Global tab ----------------
+    QWidget *extTxPage = new QWidget();
+    QFormLayout *extTxForm = new QFormLayout(extTxPage);
+    extTxForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+
+    QScrollArea *extTxScroll = new QScrollArea(ext7610Tabs);
+    extTxScroll->setObjectName(QStringLiteral("extTxScroll"));
+    extTxScroll->setWidgetResizable(true);
+    extTxScroll->setFrameShape(QFrame::NoFrame);
+    extTxScroll->setWidget(extTxPage);
+    ext7610Tabs->addTab(extTxScroll, tr("TX / Global"));
+
+    QCheckBox *dialLockChk = extMakeCheck("dialLockChk");
+    extTxForm->addRow(tr("Dial Lock"), dialLockChk);
+
+    QCheckBox *mainSubTrackingChk = extMakeCheck("mainSubTrackingChk");
+    extTxForm->addRow(tr("MAIN/SUB Tracking"), mainSubTrackingChk);
+
+    QSpinBox *compLevelSpin = extMakeSpin("compLevelSpin", 0, 10, false);
+    extTxForm->addRow(tr("Compressor Level"), compLevelSpin);
+
+    QSpinBox *driveGainSpin = extMakeSpin("driveGainSpin", 0, 100, false);
+    driveGainSpin->setSuffix(tr("%"));
+    extTxForm->addRow(tr("Drive Gain"), driveGainSpin);
+
+    QSpinBox *voxGainSpin = extMakeSpin("voxGainSpin", 0, 100, false);
+    voxGainSpin->setSuffix(tr("%"));
+    extTxForm->addRow(tr("VOX Gain"), voxGainSpin);
+
+    QSpinBox *antiVoxGainSpin = extMakeSpin("antiVoxGainSpin", 0, 100, false);
+    antiVoxGainSpin->setSuffix(tr("%"));
+    extTxForm->addRow(tr("Anti-VOX Gain"), antiVoxGainSpin);
+
+    QSpinBox *voxDelaySpin = extMakeSpin("voxDelaySpin", 0, 20, false);
+    voxDelaySpin->setSuffix(tr(" x0.1 s"));
+    extTxForm->addRow(tr("VOX Delay"), voxDelaySpin);
+
+    QComboBox *voxVoiceDelayCombo = new QComboBox(ext7610Dialog);
+    voxVoiceDelayCombo->setObjectName(QStringLiteral("voxVoiceDelayCombo"));
+    voxVoiceDelayCombo->setEnabled(false);
+    voxVoiceDelayCombo->addItem(tr("OFF"), 0);
+    voxVoiceDelayCombo->addItem(tr("SHORT"), 1);
+    voxVoiceDelayCombo->addItem(tr("MID"), 2);
+    voxVoiceDelayCombo->addItem(tr("LONG"), 3);
+    voxVoiceDelayCombo->setCurrentIndex(-1);
+    extTxForm->addRow(tr("VOX Voice Delay"), voxVoiceDelayCombo);
+
+    QComboBox *breakInModeCombo = new QComboBox(ext7610Dialog);
+    breakInModeCombo->setObjectName(QStringLiteral("breakInModeCombo"));
+    breakInModeCombo->setEnabled(false);
+    breakInModeCombo->addItem(tr("OFF"), 0);
+    breakInModeCombo->addItem(tr("SEMI"), 1);
+    breakInModeCombo->addItem(tr("FULL"), 2);
+    breakInModeCombo->setCurrentIndex(-1);
+    extTxForm->addRow(tr("CW Break-In"), breakInModeCombo);
+
+    QSpinBox *breakInDelaySpin = extMakeSpin("breakInDelaySpin", 20, 130, false);
+    breakInDelaySpin->setSuffix(tr(" x0.1 d"));
+    extTxForm->addRow(tr("Break-In Delay"), breakInDelaySpin);
+
+    QComboBox *ssbTxBwCombo = new QComboBox(ext7610Dialog);
+    ssbTxBwCombo->setObjectName(QStringLiteral("ssbTxBwCombo"));
+    ssbTxBwCombo->setEnabled(false);
+    ssbTxBwCombo->addItem(tr("WIDE"), 0);
+    ssbTxBwCombo->addItem(tr("MID"), 1);
+    ssbTxBwCombo->addItem(tr("NAR"), 2);
+    ssbTxBwCombo->setCurrentIndex(-1);
+    extTxForm->addRow(tr("SSB TX Bandwidth"), ssbTxBwCombo);
+
+    QHBoxLayout *extButtonLayout = new QHBoxLayout();
+    extButtonLayout->addStretch();
+
+    // IC7610_V23_SET_TAB_BEGIN
+    QWidget *extSetPage = new QWidget();
+    QFormLayout *extSetForm = new QFormLayout(extSetPage);
+    extSetForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    extSetForm->setVerticalSpacing(8);
+
+    QScrollArea *extSetScroll = new QScrollArea(ext7610Tabs);
+    extSetScroll->setObjectName(QStringLiteral("extSetScroll"));
+    extSetScroll->setWidgetResizable(true);
+    extSetScroll->setFrameShape(QFrame::NoFrame);
+    extSetScroll->setWidget(extSetPage);
+    ext7610Tabs->addTab(extSetScroll, tr("7610 SET"));
+
+    QLabel *setNotice = new QLabel(
+        tr("Audited CI-V read/write SET controls. Each control stays disabled "
+           "until its first reply is received from the radio."),
+        extSetPage);
+    setNotice->setWordWrap(true);
+    extSetForm->addRow(setNotice);
+    // IC7610_V27_CATEGORY_TABS
+    QTabWidget *setCategoryTabs = new QTabWidget(extSetPage);
+    setCategoryTabs->setObjectName(QStringLiteral("setCategoryTabs"));
+
+    QWidget *setFunctionPage = new QWidget();
+    QFormLayout *setFunctionForm = new QFormLayout(setFunctionPage);
+    setFunctionForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    setFunctionForm->setVerticalSpacing(8);
+    QScrollArea *setFunctionScroll = new QScrollArea(setCategoryTabs);
+    setFunctionScroll->setWidgetResizable(true);
+    setFunctionScroll->setFrameShape(QFrame::NoFrame);
+    setFunctionScroll->setWidget(setFunctionPage);
+    setCategoryTabs->addTab(setFunctionScroll, tr("Function"));
+
+    QWidget *setAudioPage = new QWidget();
+    QFormLayout *setAudioForm = new QFormLayout(setAudioPage);
+    setAudioForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    setAudioForm->setVerticalSpacing(8);
+    QScrollArea *setAudioScroll = new QScrollArea(setCategoryTabs);
+    setAudioScroll->setWidgetResizable(true);
+    setAudioScroll->setFrameShape(QFrame::NoFrame);
+    setAudioScroll->setWidget(setAudioPage);
+    setCategoryTabs->addTab(setAudioScroll, tr("Audio / I-O"));
+
+    QWidget *setTonePage = new QWidget();
+    QFormLayout *setToneForm = new QFormLayout(setTonePage);
+    setToneForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    setToneForm->setVerticalSpacing(8);
+    QScrollArea *setToneScroll = new QScrollArea(setCategoryTabs);
+    setToneScroll->setWidgetResizable(true);
+    setToneScroll->setFrameShape(QFrame::NoFrame);
+    setToneScroll->setWidget(setTonePage);
+    setCategoryTabs->addTab(setToneScroll, tr("Tone Control"));
+
+    QWidget *setCwRttyPage = new QWidget();
+    QFormLayout *setCwRttyForm = new QFormLayout(setCwRttyPage);
+    setCwRttyForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    setCwRttyForm->setVerticalSpacing(8);
+    QScrollArea *setCwRttyScroll = new QScrollArea(setCategoryTabs);
+    setCwRttyScroll->setWidgetResizable(true);
+    setCwRttyScroll->setFrameShape(QFrame::NoFrame);
+    setCwRttyScroll->setWidget(setCwRttyPage);
+    setCategoryTabs->addTab(setCwRttyScroll, tr("CW / RTTY"));
+
+    QWidget *setCivPage = new QWidget();
+    QFormLayout *setCivForm = new QFormLayout(setCivPage);
+    setCivForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    setCivForm->setVerticalSpacing(8);
+    QScrollArea *setCivScroll = new QScrollArea(setCategoryTabs);
+    setCivScroll->setWidgetResizable(true);
+    setCivScroll->setFrameShape(QFrame::NoFrame);
+    setCivScroll->setWidget(setCivPage);
+    setCategoryTabs->addTab(setCivScroll, tr("CI-V"));
+
+    extSetForm->addRow(setCategoryTabs);
+
+    QLabel *setFunctionHdr = new QLabel(tr("<b>Function / Behavior</b>"), extSetPage);
+    setFunctionForm->addRow(setFunctionHdr);
+
+    QCheckBox *setQuickDualChk = extMakeCheck("setQuickDualChk");
+    setFunctionForm->addRow(tr("Quick Dual Watch"), setQuickDualChk);
+
+    QCheckBox *setQuickSplitChk = extMakeCheck("setQuickSplitChk");
+    setFunctionForm->addRow(tr("Quick Split"), setQuickSplitChk);
+
+    QCheckBox *setCivTransceiveChk = extMakeCheck("setCivTransceiveChk");
+    setCivForm->addRow(tr("CI-V Transceive"), setCivTransceiveChk);
+
+    QCheckBox *setCivOutputChk = extMakeCheck("setCivOutputChk");
+        // IC7610_V37_CIV_CONTROLS
+    QLabel *setCivRadioHdr =
+            new QLabel(tr("<b>Radio CI-V Settings</b>"), extSetPage);
+    setCivForm->insertRow(0, setCivRadioHdr);
+
+        // IC7610_V38_CIV_COMBO_HELPER
+    auto setV38CivCombo = [=](const char *name) -> QComboBox* {
+        QComboBox *w = new QComboBox(ext7610Dialog);
+        w->setObjectName(QString::fromLatin1(name));
+        w->setEnabled(false);
+        w->setCurrentIndex(-1);
+        w->setMinimumHeight(qMax(30, w->sizeHint().height() + 8));
+        w->setMinimumWidth(qMax(170, w->sizeHint().width() + 20));
+        return w;
+    };
+QComboBox *setCivTimeoutCombo =
+            setV38CivCombo("setCivTimeoutCombo");
+    setCivTimeoutCombo->addItem(tr("OFF"), 0);
+    setCivTimeoutCombo->addItem(tr("3 min"), 1);
+    setCivTimeoutCombo->addItem(tr("5 min"), 2);
+    setCivTimeoutCombo->addItem(tr("10 min"), 3);
+    setCivTimeoutCombo->addItem(tr("20 min"), 4);
+    setCivTimeoutCombo->addItem(tr("30 min"), 5);
+    setCivForm->addRow(
+            tr("CI-V Time-Out Timer"), setCivTimeoutCombo);
+
+    QComboBox *setCivRemoteAddrCombo =
+            setV38CivCombo("setCivRemoteAddrCombo");
+    for (int a = 0; a <= 0xDF; ++a) {
+        setCivRemoteAddrCombo->addItem(
+            QStringLiteral("0x%1")
+                .arg(a, 2, 16, QChar('0')).toUpper(),
+            a);
+    }
+    setCivForm->addRow(
+            tr("USB/LAN -> REMOTE Address"), setCivRemoteAddrCombo);
+setCivForm->addRow(tr("CI-V Output (ANT)"), setCivOutputChk);
+    QComboBox *setCivUsbPortCombo =
+            setV38CivCombo("setCivUsbPortCombo");
+    setCivUsbPortCombo->addItem(tr("Link to [REMOTE]"), 0);
+    setCivUsbPortCombo->addItem(tr("Unlink from [REMOTE]"), 1);
+    setCivForm->addRow(
+            tr("CI-V USB Port"), setCivUsbPortCombo);
+
+    QCheckBox *setCivUsbEchoChk =
+            extMakeCheck("setCivUsbEchoChk");
+    setCivForm->addRow(
+            tr("CI-V USB Echo Back"), setCivUsbEchoChk);
+
+    QLabel *setCivConnectionHdr =
+            new QLabel(tr("<b>wfview Connection</b>"), extSetPage);
+    setCivForm->addRow(setCivConnectionHdr);
+
+    QLabel *setCivProtocolValue =
+            new QLabel(tr("Icom CI-V"), ext7610Dialog);
+    setCivProtocolValue->setObjectName(
+            QStringLiteral("setCivProtocolValue"));
+    setCivForm->addRow(
+            tr("Protocol"), setCivProtocolValue);
+
+    QLabel *setCivTransportValue =
+            new QLabel(
+                prefs.enableLAN
+                    ? tr("LAN / Network")
+                    : tr("Serial / USB"),
+                ext7610Dialog);
+    setCivTransportValue->setObjectName(
+            QStringLiteral("setCivTransportValue"));
+    setCivForm->addRow(
+            tr("wfview Transport"), setCivTransportValue);
+
+    QLabel *setCivPortValue =
+            new QLabel(
+                prefs.enableLAN
+                    ? tr("Native LAN")
+                    : prefs.serialPortRadio,
+                ext7610Dialog);
+    setCivPortValue->setObjectName(
+            QStringLiteral("setCivPortValue"));
+    setCivForm->addRow(
+            tr("Port"), setCivPortValue);
+
+    QLabel *setCivBaudValue =
+            new QLabel(
+                prefs.serialPortBaud
+                    ? QStringLiteral("%1 baud")
+                        .arg(prefs.serialPortBaud)
+                    : tr("Auto / unknown"),
+                ext7610Dialog);
+    setCivBaudValue->setObjectName(
+            QStringLiteral("setCivBaudValue"));
+    setCivForm->addRow(
+            tr("Current Baud"), setCivBaudValue);
+
+    QLabel *setCivLocalAddressValue =
+            new QLabel(ext7610Dialog);
+    setCivLocalAddressValue->setObjectName(
+            QStringLiteral("setCivLocalAddressValue"));
+    if (prefs.radioCIVAddr == 0) {
+        setCivLocalAddressValue->setText(tr("Auto"));
+    }
+    else {
+        setCivLocalAddressValue->setText(
+            QStringLiteral("0x%1")
+                .arg(prefs.radioCIVAddr, 2, 16, QChar('0'))
+                .toUpper());
+    }
+    setCivForm->addRow(
+            tr("wfview Radio Address"), setCivLocalAddressValue);
+
+    QLabel *setCivMenuNote =
+            new QLabel(
+                tr("Radio CI-V Baud Rate and primary CI-V Address are "
+                   "radio SET-menu items; the IC-7610 does not expose them "
+                   "as normal R/W CI-V settings."),
+                ext7610Dialog);
+    setCivMenuNote->setWordWrap(true);
+    setCivMenuNote->setStyleSheet(
+            QStringLiteral("QLabel { color: palette(mid); }"));
+    setCivForm->addRow(setCivMenuNote);
+
+    QPushButton *setCivOpenSettingsBtn =
+            new QPushButton(tr("Open Connection Settings..."), ext7610Dialog);
+    setCivOpenSettingsBtn->setMinimumHeight(
+            qMax(30, setCivOpenSettingsBtn->sizeHint().height() + 6));
+    setCivOpenSettingsBtn->setMaximumWidth(260);
+    setCivForm->addRow(setCivOpenSettingsBtn);
+
+    connect(
+        setCivOpenSettingsBtn,
+        &QPushButton::clicked,
+        this,
+        [=]() {
+            showAndRaiseWidget(setupui);
+        });
+
+
+    QSpinBox *setDashRatioSpin = extMakeSpin("setDashRatioSpin", 28, 45, false);
+    setDashRatioSpin->setSuffix(tr(" x0.1"));
+    setDashRatioSpin->setToolTip(tr("28 = 2.8, 45 = 4.5"));
+            // IC7610_V41_CIV_RUNTIME_GROUPING
+    // Re-home existing CI-V rows by widget pointer instead of source-text
+    // replacement. This is intentionally insensitive to formatting changes.
+    QGroupBox *setCivRadioConfigGroup =
+            new QGroupBox(tr("Radio CI-V Configuration"), extSetPage);
+    QFormLayout *setCivRadioConfigForm =
+            new QFormLayout(setCivRadioConfigGroup);
+    setCivRadioConfigForm->setFieldGrowthPolicy(
+            QFormLayout::ExpandingFieldsGrow);
+
+    QGroupBox *setCivConnectionGroup =
+            new QGroupBox(tr("wfview Connection"), extSetPage);
+    QFormLayout *setCivConnectionForm =
+            new QFormLayout(setCivConnectionGroup);
+    setCivConnectionForm->setFieldGrowthPolicy(
+            QFormLayout::ExpandingFieldsGrow);
+
+    auto moveCivRow =
+            [=](QWidget *field, QFormLayout *destination) {
+        if (!field || !destination)
+            return;
+
+        int row = -1;
+        QFormLayout::ItemRole role = QFormLayout::FieldRole;
+        setCivForm->getWidgetPosition(field, &row, &role);
+
+        if (row < 0)
+            return;
+
+        QFormLayout::TakeRowResult taken =
+                setCivForm->takeRow(row);
+
+        QWidget *labelWidget =
+                taken.labelItem
+                    ? taken.labelItem->widget()
+                    : nullptr;
+
+        QWidget *fieldWidget =
+                taken.fieldItem
+                    ? taken.fieldItem->widget()
+                    : nullptr;
+
+        if (labelWidget && fieldWidget)
+            destination->addRow(labelWidget, fieldWidget);
+        else if (fieldWidget)
+            destination->addRow(fieldWidget);
+        else if (labelWidget)
+            destination->addRow(labelWidget);
+
+        delete taken.labelItem;
+        delete taken.fieldItem;
+    };
+
+    // Old loose section headers are replaced by the group-box titles.
+    if (setCivRadioHdr)
+        setCivForm->removeRow(setCivRadioHdr);
+    if (setCivConnectionHdr)
+        setCivForm->removeRow(setCivConnectionHdr);
+
+    QLabel *setCivRadioBaudInfo =
+            new QLabel(
+                tr("Front-panel SET only: Auto / 4800 / 9600 / 19200 / "
+                   "38400 / 57600 / 115200"),
+                ext7610Dialog);
+    // IC7610_V46_CIV_RUNTIME_OBJECTS
+    setCivRadioBaudInfo->setObjectName(
+            QStringLiteral("setCivRadioBaudInfo"));    setCivRadioBaudInfo->setWordWrap(true);
+    setCivRadioConfigForm->addRow(
+            tr("CI-V Baud Rate"), setCivRadioBaudInfo);
+
+    QString setCivAddressText =
+            tr("Front-panel SET only");
+
+    if (prefs.radioCIVAddr != 0) {
+        setCivAddressText +=
+                tr(" — wfview target is 0x%1")
+                    .arg(prefs.radioCIVAddr, 2, 16, QChar('0'))
+                    .toUpper();
+    }
+    else {
+        setCivAddressText +=
+                tr(" — IC-7610 default is 0x98");
+    }
+
+    QLabel *setCivRadioAddressInfo =
+            new QLabel(setCivAddressText, ext7610Dialog);
+    setCivRadioAddressInfo->setObjectName(
+            QStringLiteral("setCivRadioAddressInfo"));    setCivRadioAddressInfo->setWordWrap(true);
+    setCivRadioConfigForm->addRow(
+            tr("CI-V Address"), setCivRadioAddressInfo);
+
+    QLabel *setCivUsbBaudInfo =
+            new QLabel(
+                tr("Front-panel SET only: Auto / 4800 / 9600 / 19200 / "
+                   "38400 / 57600 / 115200; applies when CI-V USB Port "
+                   "is Unlink from [REMOTE]"),
+                ext7610Dialog);
+    setCivUsbBaudInfo->setObjectName(
+            QStringLiteral("setCivUsbBaudInfo"));    setCivUsbBaudInfo->setWordWrap(true);
+    setCivRadioConfigForm->addRow(
+            tr("CI-V USB Baud Rate"), setCivUsbBaudInfo);
+
+    // Live radio R/W CI-V settings.
+    moveCivRow(setCivTransceiveChk, setCivRadioConfigForm);
+    moveCivRow(setCivTimeoutCombo, setCivRadioConfigForm);
+    moveCivRow(setCivRemoteAddrCombo, setCivRadioConfigForm);
+    moveCivRow(setCivOutputChk, setCivRadioConfigForm);
+    moveCivRow(setCivUsbPortCombo, setCivRadioConfigForm);
+    moveCivRow(setCivUsbEchoChk, setCivRadioConfigForm);
+
+    // wfview-side connection information / entry point.
+    moveCivRow(setCivProtocolValue, setCivConnectionForm);
+    moveCivRow(setCivTransportValue, setCivConnectionForm);
+    moveCivRow(setCivPortValue, setCivConnectionForm);
+    moveCivRow(setCivBaudValue, setCivConnectionForm);
+    moveCivRow(setCivLocalAddressValue, setCivConnectionForm);
+    moveCivRow(setCivMenuNote, setCivConnectionForm);
+    // IC7610_V48_CIV_DEDUP
+    // setCivConnectionExplanation (below) says the same thing in full.
+    setCivConnectionForm->setRowVisible(setCivMenuNote, false);
+    moveCivRow(setCivOpenSettingsBtn, setCivConnectionForm);
+
+    auto renameCivLabel =
+            [=](QFormLayout *form,
+                QWidget *field,
+                const QString &text) {
+        int row = -1;
+        QFormLayout::ItemRole role = QFormLayout::FieldRole;
+        form->getWidgetPosition(field, &row, &role);
+
+        if (row < 0)
+            return;
+
+        QLayoutItem *item =
+                form->itemAt(row, QFormLayout::LabelRole);
+
+        QLabel *label =
+                item
+                    ? qobject_cast<QLabel *>(item->widget())
+                    : nullptr;
+
+        if (label)
+            label->setText(text);
+    };
+
+    renameCivLabel(
+            setCivConnectionForm,
+            setCivTransportValue,
+            tr("Transport"));
+
+    renameCivLabel(
+            setCivConnectionForm,
+            setCivPortValue,
+            tr("COM / Port"));
+
+    renameCivLabel(
+            setCivConnectionForm,
+            setCivBaudValue,
+            tr("wfview COM Baud"));
+
+    if (prefs.enableLAN)
+        setCivBaudValue->setText(tr("N/A (LAN transport)"));
+
+    QLabel *setCivConnectionExplanation =
+            new QLabel(
+                tr("Radio CI-V Baud Rate, CI-V Address, and CI-V USB Baud "
+                   "Rate are radio front-panel SET items, not normal remote "
+                   "R/W CI-V commands. COM / Port and wfview COM Baud are "
+                   "the PC-side connection settings."),
+                ext7610Dialog);
+    setCivConnectionExplanation->setWordWrap(true);
+    setCivConnectionExplanation->setStyleSheet(
+            QStringLiteral("QLabel { color: palette(mid); }"));
+    setCivConnectionForm->addRow(setCivConnectionExplanation);
+
+    // IC7610_V48_CIV_TOOLTIPS
+    {
+        const QString v48FrontPanelTip =
+                tr("This is an IC-7610 front-panel SET menu item. "
+                   "The radio does not report it over CI-V, so wfview "
+                   "cannot read it. Over LAN there is no serial baud at all; "
+                   "over USB/serial wfview shows the effective link rate.");
+        setCivRadioBaudInfo->setToolTip(v48FrontPanelTip);
+        setCivUsbBaudInfo->setToolTip(v48FrontPanelTip);
+        setCivRadioAddressInfo->setToolTip(
+                tr("The radio's CI-V Address menu value cannot be read "
+                   "remotely. Shown is wfview's own target address "
+                   "(Settings > Radio Connection)."));
+    }
+
+    // At this point the old loose rows have been taken out of setCivForm.
+    setCivForm->addRow(setCivRadioConfigGroup);
+    setCivForm->addRow(setCivConnectionGroup);
+    // IC7610_V43_FINAL2_CIV_INFO
+    // Show the values wfview can actually observe or infer without
+    // pretending the literal front-panel-only menu item is remotely R/W.
+    if (prefs.enableLAN) {
+        setCivRadioBaudInfo->setText(
+                tr("Not readable over LAN"));
+
+        setCivUsbBaudInfo->setText(
+                tr("Not readable over LAN"));
+
+        setCivBaudValue->setText(
+                tr("N/A (LAN transport)"));
+    }
+    else {
+        if (prefs.serialPortBaud > 0) {
+            setCivRadioBaudInfo->setText(
+                tr("Effective link: %1 baud; radio SET may literally "
+                   "be AUTO or this fixed rate")
+                    .arg(prefs.serialPortBaud));
+
+            setCivUsbBaudInfo->setText(
+                tr("Effective serial link: %1 baud; literal USB Baud "
+                   "vs [REMOTE]-linked rate is not separately observable")
+                    .arg(prefs.serialPortBaud));
+
+            setCivBaudValue->setText(
+                tr("%1 baud")
+                    .arg(prefs.serialPortBaud));
+        }
+        else {
+            setCivRadioBaudInfo->setText(
+                tr("Effective serial baud is not known"));
+
+            setCivUsbBaudInfo->setText(
+                tr("Effective serial baud is not known"));
+        }
+    }
+
+    if (prefs.radioCIVAddr != 0) {
+        setCivRadioAddressInfo->setText(
+                tr("wfview target 0x%1")
+                    .arg(
+                        prefs.radioCIVAddr & 0xff,
+                        2,
+                        16,
+                        QChar('0'))
+                    .toUpper());
+    }
+    else {
+        setCivRadioAddressInfo->setText(
+                tr("Auto (wfview detects radio)"));
+    }
+    // IC7610_V45_CIV_LIVE_BAUD
+    // Prefer the baud actually reported by the connected rig object.
+    // This is the effective live CI-V serial link rate.  It does not claim
+    // that the IC-7610 front-panel CI-V Baud menu is literally fixed rather
+    // than AUTO.
+    auto v45ValidCivBaud =
+            [](quint32 baud) -> bool {
+        switch (baud) {
+        case 4800:
+        case 9600:
+        case 19200:
+        case 38400:
+        case 57600:
+        case 115200:
+            return true;
+        default:
+            return false;
+        }
+    };
+
+    quint32 v45CivBaud = 0;
+
+    if (rigCaps != Q_NULLPTR &&
+        v45ValidCivBaud(rigCaps->baudRate)) {
+        v45CivBaud = rigCaps->baudRate;
+    }
+
+    if (v45CivBaud == 0 &&
+        v45ValidCivBaud(prefs.serialPortBaud)) {
+        v45CivBaud = prefs.serialPortBaud;
+    }
+
+    if (v45CivBaud == 0 &&
+        v45ValidCivBaud(serverConfig.baudRate)) {
+        v45CivBaud = serverConfig.baudRate;
+    }
+
+    if (prefs.enableLAN) {
+        setCivRadioBaudInfo->setText(
+            tr("Not readable over LAN"));
+
+        setCivUsbBaudInfo->setText(
+            tr("Not readable over LAN"));
+
+        setCivBaudValue->setText(
+            tr("N/A (LAN transport)"));
+    }
+    else if (v45CivBaud != 0) {
+        setCivRadioBaudInfo->setText(
+            tr("%1 baud - live/effective serial CI-V link; "
+               "front-panel CI-V Baud may be AUTO or fixed")
+                .arg(v45CivBaud));
+
+        setCivUsbBaudInfo->setText(
+            tr("%1 baud - live/effective serial CI-V link; "
+               "literal USB Baud vs [REMOTE]-linked selection "
+               "is not separately observable")
+                .arg(v45CivBaud));
+
+        setCivBaudValue->setText(
+            tr("%1 baud")
+                .arg(v45CivBaud));
+    }
+    else {
+        setCivRadioBaudInfo->setText(
+            tr("Effective serial CI-V baud is not available"));
+
+        setCivUsbBaudInfo->setText(
+            tr("Effective serial CI-V baud is not available"));
+
+        setCivBaudValue->setText(
+            tr("Unknown"));
+    }
+// IC7610_V37_CW_RTTY_CONTROLS
+    auto setV37Combo = [=](const char *name) -> QComboBox* {
+        QComboBox *w = new QComboBox(ext7610Dialog);
+        w->setObjectName(QString::fromLatin1(name));
+        w->setEnabled(false);
+        w->setCurrentIndex(-1);
+        w->setMinimumHeight(qMax(30, w->sizeHint().height() + 8));
+        w->setMinimumWidth(qMax(170, w->sizeHint().width() + 20));
+        return w;
+    };
+
+        // IC7610_V39_CW_RTTY_CONFIG_GROUPS
+    QGroupBox *setRttyConfigGroup =
+            new QGroupBox(tr("RTTY Configuration"), extSetPage);
+    QFormLayout *setRttyConfigForm =
+            new QFormLayout(setRttyConfigGroup);
+    setRttyConfigForm->setFieldGrowthPolicy(
+            QFormLayout::ExpandingFieldsGrow);
+    setCwRttyForm->addRow(setRttyConfigGroup);
+
+    QGroupBox *setRttyDecodeGroup =
+            new QGroupBox(tr("RTTY Decoder / Logging"), extSetPage);
+    QFormLayout *setRttyDecodeForm =
+            new QFormLayout(setRttyDecodeGroup);
+    setRttyDecodeForm->setFieldGrowthPolicy(
+            QFormLayout::ExpandingFieldsGrow);
+    setCwRttyForm->addRow(setRttyDecodeGroup);
+
+    QGroupBox *setCwConfigGroup =
+            new QGroupBox(tr("CW Configuration"), extSetPage);
+    QFormLayout *setCwConfigForm =
+            new QFormLayout(setCwConfigGroup);
+    setCwConfigForm->setFieldGrowthPolicy(
+            QFormLayout::ExpandingFieldsGrow);
+    setCwRttyForm->addRow(setCwConfigGroup);
+QLabel *setRttyHdr =
+            new QLabel(tr("<b>RTTY</b>"), extSetPage);
+    setRttyHdr->hide(); // IC7610_V39_GROUPED_RTTY
+
+    QComboBox *setRttyMarkCombo =
+            setV37Combo("setRttyMarkCombo");
+    setRttyMarkCombo->addItem(tr("1275 Hz"), 0);
+    setRttyMarkCombo->addItem(tr("1615 Hz"), 1);
+    setRttyMarkCombo->addItem(tr("2125 Hz"), 2);
+    setCwRttyForm->addRow(
+            tr("RTTY Mark Frequency"), setRttyMarkCombo);
+
+    QComboBox *setRttyShiftCombo =
+            setV37Combo("setRttyShiftCombo");
+    setRttyShiftCombo->addItem(tr("170 Hz"), 0);
+    setRttyShiftCombo->addItem(tr("200 Hz"), 1);
+    setRttyShiftCombo->addItem(tr("425 Hz"), 2);
+    setCwRttyForm->addRow(
+            tr("RTTY Shift Width"), setRttyShiftCombo);
+
+    QComboBox *setRttyPolarityCombo =
+            setV37Combo("setRttyPolarityCombo");
+    setRttyPolarityCombo->addItem(tr("Normal"), 0);
+    setRttyPolarityCombo->addItem(tr("Reverse"), 1);
+    setCwRttyForm->addRow(
+            tr("RTTY Keying Polarity"), setRttyPolarityCombo);
+
+        // IC7610_V39_RTTY_CONTROLS
+    QCheckBox *setExternalKeypadRttyChk =
+            extMakeCheck("setExternalKeypadRttyChk");
+    setRttyConfigForm->addRow(
+            tr("External Keypad RTTY"), setExternalKeypadRttyChk);
+
+    QComboBox *setDecodeBaudCombo =
+            setV37Combo("setDecodeBaudCombo");
+    setDecodeBaudCombo->addItem(tr("4800 bps"), 0);
+    setDecodeBaudCombo->addItem(tr("9600 bps"), 1);
+    setDecodeBaudCombo->addItem(tr("19200 bps"), 2);
+    setDecodeBaudCombo->addItem(tr("38400 bps"), 3);
+    setRttyConfigForm->addRow(
+            tr("Decoded Data Baud Rate"), setDecodeBaudCombo);
+
+    QComboBox *setRttyFftAvgCombo =
+            setV37Combo("setRttyFftAvgCombo");
+    setRttyFftAvgCombo->addItem(tr("OFF"), 0);
+    setRttyFftAvgCombo->addItem(tr("2"), 1);
+    setRttyFftAvgCombo->addItem(tr("3"), 2);
+    setRttyFftAvgCombo->addItem(tr("4"), 3);
+    setRttyDecodeForm->addRow(
+            tr("FFT Scope Averaging"), setRttyFftAvgCombo);
+
+    QCheckBox *setRttyDecodeUsosChk =
+            extMakeCheck("setRttyDecodeUsosChk");
+    setRttyDecodeForm->addRow(
+            tr("Decode USOS"), setRttyDecodeUsosChk);
+
+    QComboBox *setRttyNewLineCombo =
+            setV37Combo("setRttyNewLineCombo");
+    setRttyNewLineCombo->addItem(tr("CR, LF, CR+LF"), 0);
+    setRttyNewLineCombo->addItem(tr("CR+LF"), 1);
+    setRttyDecodeForm->addRow(
+            tr("Decode New Line Code"), setRttyNewLineCombo);
+
+    QComboBox *setRttyDiddleCombo =
+            setV37Combo("setRttyDiddleCombo");
+    setRttyDiddleCombo->addItem(tr("OFF"), 0);
+    setRttyDiddleCombo->addItem(tr("BLANK"), 1);
+    setRttyDiddleCombo->addItem(tr("LTRS"), 2);
+    setRttyDecodeForm->addRow(
+            tr("Diddle"), setRttyDiddleCombo);
+
+    QCheckBox *setRttyTxUsosChk =
+            extMakeCheck("setRttyTxUsosChk");
+    setRttyDecodeForm->addRow(
+            tr("TX USOS"), setRttyTxUsosChk);
+
+    QCheckBox *setRttyAutoCrlfChk =
+            extMakeCheck("setRttyAutoCrlfChk");
+    setRttyDecodeForm->addRow(
+            tr("Auto CR+LF by TX"), setRttyAutoCrlfChk);
+
+    QCheckBox *setRttyTimestampChk =
+            extMakeCheck("setRttyTimestampChk");
+    setRttyDecodeForm->addRow(
+            tr("Time Stamp"), setRttyTimestampChk);
+
+    QComboBox *setRttyTimestampTimeCombo =
+            setV37Combo("setRttyTimestampTimeCombo");
+    setRttyTimestampTimeCombo->addItem(tr("Local"), 0);
+    setRttyTimestampTimeCombo->addItem(
+            tr("UTC (CLOCK2 UTC Offset)"), 1);
+    setRttyDecodeForm->addRow(
+            tr("Time Stamp Time"), setRttyTimestampTimeCombo);
+
+    QCheckBox *setRttyTimestampFreqChk =
+            extMakeCheck("setRttyTimestampFreqChk");
+    setRttyDecodeForm->addRow(
+            tr("Time Stamp Frequency"), setRttyTimestampFreqChk);
+
+    QCheckBox *setRttyDecodeLogChk =
+            extMakeCheck("setRttyDecodeLogChk");
+    setRttyDecodeForm->addRow(
+            tr("Decode Log"), setRttyDecodeLogChk);
+
+    QComboBox *setRttyLogFileTypeCombo =
+            setV37Combo("setRttyLogFileTypeCombo");
+    setRttyLogFileTypeCombo->addItem(tr("Text"), 0);
+    setRttyLogFileTypeCombo->addItem(tr("HTML"), 1);
+    setRttyDecodeForm->addRow(
+            tr("Log File Type"), setRttyLogFileTypeCombo);
+
+    QLabel *setRttyColorNote =
+            new QLabel(
+                tr("RTTY waveform/font colors use multivalue RGB CI-V data. "
+                   "They will get proper color-picker controls rather than "
+                   "raw numeric fields."),
+                ext7610Dialog);
+    setRttyColorNote->setWordWrap(true);
+    setRttyColorNote->setStyleSheet(
+            QStringLiteral("QLabel { color: palette(mid); }"));
+    setRttyDecodeForm->addRow(setRttyColorNote);
+QLabel *setCwHdr =
+            new QLabel(tr("<b>CW</b>"), extSetPage);
+    setCwHdr->hide(); // IC7610_V39_GROUPED_CW
+
+    QCheckBox *setCwSyncChk =
+            extMakeCheck("setCwSyncChk");
+    setCwRttyForm->addRow(
+            tr("SSB/CW Synchronous Tuning"), setCwSyncChk);
+
+    QComboBox *setCwNormalSideCombo =
+            setV37Combo("setCwNormalSideCombo");
+    setCwNormalSideCombo->addItem(tr("LSB"), 0);
+    setCwNormalSideCombo->addItem(tr("USB"), 1);
+    setCwRttyForm->addRow(
+            tr("CW Normal Side"), setCwNormalSideCombo);
+
+    QSpinBox *setSideToneLevelSpin =
+            extMakeSpin("setSideToneLevelSpin", 0, 100, false);
+    setSideToneLevelSpin->setSuffix(tr("%"));
+    setCwRttyForm->addRow(
+            tr("Side Tone Level"), setSideToneLevelSpin);
+
+    QCheckBox *setSideToneLimitChk =
+            extMakeCheck("setSideToneLimitChk");
+    setCwRttyForm->addRow(
+            tr("Side Tone Level Limit"), setSideToneLimitChk);
+
+    QSpinBox *setKeyerRepeatSpin =
+            extMakeSpin("setKeyerRepeatSpin", 1, 60, false);
+    setKeyerRepeatSpin->setSuffix(tr(" sec"));
+    setCwRttyForm->addRow(
+            tr("Keyer Repeat Time"), setKeyerRepeatSpin);
+setCwConfigForm->addRow(tr("CW Dash Ratio"), setDashRatioSpin);
+    QComboBox *setCwRiseCombo =
+            setV37Combo("setCwRiseCombo");
+    setCwRiseCombo->addItem(tr("2 ms"), 0);
+    setCwRiseCombo->addItem(tr("4 ms"), 1);
+    setCwRiseCombo->addItem(tr("6 ms"), 2);
+    setCwRiseCombo->addItem(tr("8 ms"), 3);
+    setCwRttyForm->addRow(
+            tr("CW Rise Time"), setCwRiseCombo);
+
+    QComboBox *setPaddlePolarityCombo =
+            setV37Combo("setPaddlePolarityCombo");
+    setPaddlePolarityCombo->addItem(tr("Normal"), 0);
+    setPaddlePolarityCombo->addItem(tr("Reverse"), 1);
+    setCwRttyForm->addRow(
+            tr("Paddle Polarity"), setPaddlePolarityCombo);
+
+    QComboBox *setKeyTypeCombo =
+            setV37Combo("setKeyTypeCombo");
+    setKeyTypeCombo->addItem(tr("Straight"), 0);
+    setKeyTypeCombo->addItem(tr("Bug"), 1);
+    setKeyTypeCombo->addItem(tr("Paddle"), 2);
+    setCwRttyForm->addRow(
+            tr("Key Type"), setKeyTypeCombo);
+
+    QCheckBox *setMicUpDownKeyerChk =
+            extMakeCheck("setMicUpDownKeyerChk");
+    setCwRttyForm->addRow(
+            tr("MIC Up/Down Keyer"), setMicUpDownKeyerChk);
+
+    QLabel *setUsbKeyingHdr =
+            new QLabel(tr("<b>USB Keying</b>"), extSetPage);
+    setUsbKeyingHdr->hide(); // IC7610_V39_GROUPED_USB_KEYING
+
+    auto fillUsbKeying = [=](QComboBox *w) {
+        w->addItem(tr("OFF"), 0);
+        w->addItem(tr("USB1(A) DTR"), 1);
+        w->addItem(tr("USB1(A) RTS"), 2);
+        w->addItem(tr("USB1(B) DTR"), 3);
+        w->addItem(tr("USB1(B) RTS"), 4);
+    };
+
+    QComboBox *setUsbKeyCwCombo =
+            setV37Combo("setUsbKeyCwCombo");
+    fillUsbKeying(setUsbKeyCwCombo);
+    setCwRttyForm->addRow(
+            tr("USB Keying (CW)"), setUsbKeyCwCombo);
+
+    QComboBox *setUsbKeyRttyCombo =
+            setV37Combo("setUsbKeyRttyCombo");
+    fillUsbKeying(setUsbKeyRttyCombo);
+    setCwRttyForm->addRow(
+            tr("USB Keying (RTTY)"), setUsbKeyRttyCombo);
+
+
+    QLabel *setModHdr = new QLabel(tr("<b>Modulation Input Levels</b>"), extSetPage);
+    setAudioForm->addRow(setModHdr);
+
+    QSpinBox *setAccModSpin = extMakeSpin("setAccModSpin", 0, 100, false);
+    setAccModSpin->setSuffix(tr("%"));
+    setAudioForm->addRow(tr("ACC1 Mod Level"), setAccModSpin);
+
+    QSpinBox *setUsbModSpin = extMakeSpin("setUsbModSpin", 0, 100, false);
+    setUsbModSpin->setSuffix(tr("%"));
+    setAudioForm->addRow(tr("USB Mod Level"), setUsbModSpin);
+
+    QSpinBox *setLanModSpin = extMakeSpin("setLanModSpin", 0, 100, false);
+    setLanModSpin->setSuffix(tr("%"));
+    setAudioForm->addRow(tr("LAN Mod Level"), setLanModSpin);
+
+    // IC7610_V27_OUTPUT_CONTROLS
+    QLabel *setOutputHdr = new QLabel(tr("<b>AF / IF Outputs</b>"), extSetPage);
+    setAudioForm->addRow(setOutputHdr);
+
+    auto setMakeAfIf = [=](const char *name) -> QComboBox* {
+        QComboBox *w = new QComboBox(ext7610Dialog);
+        w->setObjectName(QString::fromLatin1(name));
+        w->setEnabled(false);
+        w->addItem(tr("AF"), 0);
+        w->addItem(tr("IF"), 1);
+        w->setCurrentIndex(-1);
+        return w;
+    };
+
+    QComboBox *setAccOutputSelect = setMakeAfIf("setAccOutputSelect");
+    setAudioForm->addRow(tr("ACC Output Select"), setAccOutputSelect);
+
+    QSpinBox *setAccAfOutputSpin = extMakeSpin("setAccAfOutputSpin", 0, 100, false);
+    setAccAfOutputSpin->setSuffix(tr("%"));
+    setAudioForm->addRow(tr("ACC AF Output Level"), setAccAfOutputSpin);
+
+    QSpinBox *setAccIfOutputSpin = extMakeSpin("setAccIfOutputSpin", 0, 100, false);
+    setAccIfOutputSpin->setSuffix(tr("%"));
+    setAudioForm->addRow(tr("ACC IF Output Level"), setAccIfOutputSpin);
+
+    QComboBox *setUsbOutputSelect = setMakeAfIf("setUsbOutputSelect");
+    setAudioForm->addRow(tr("USB Output Select"), setUsbOutputSelect);
+
+    QSpinBox *setUsbAfOutputSpin = extMakeSpin("setUsbAfOutputSpin", 0, 100, false);
+    setUsbAfOutputSpin->setSuffix(tr("%"));
+    setAudioForm->addRow(tr("USB AF Output Level"), setUsbAfOutputSpin);
+
+    QSpinBox *setUsbIfOutputSpin = extMakeSpin("setUsbIfOutputSpin", 0, 100, false);
+    setUsbIfOutputSpin->setSuffix(tr("%"));
+    setAudioForm->addRow(tr("USB IF Output Level"), setUsbIfOutputSpin);
+
+    QComboBox *setLanOutputSelect = setMakeAfIf("setLanOutputSelect");
+    setAudioForm->addRow(tr("LAN Output Select"), setLanOutputSelect);
+
+    QLabel *setRefHdr = new QLabel(tr("<b>Reference</b>"), extSetPage);
+    setFunctionForm->addRow(setRefHdr);
+
+    QComboBox *setRefInputCombo = new QComboBox(ext7610Dialog);
+    setRefInputCombo->setObjectName(QStringLiteral("setRefInputCombo"));
+    setRefInputCombo->setEnabled(false);
+    setRefInputCombo->addItem(tr("REF IN"), 0); // IC7610_V31_REF_LABEL
+    setRefInputCombo->addItem(tr("Internal Reference"), 1);
+    setRefInputCombo->setCurrentIndex(-1);
+    setRefInputCombo->setToolTip(
+        tr("IC-7610 REF IN: IN uses the external reference input; OFF uses the internal reference."));
+    setFunctionForm->addRow(tr("Reference Source"), setRefInputCombo);
+
+    QCheckBox *setShowVaMeterChk = extMakeCheck("setShowVaMeterChk");
+    setShowVaMeterChk->setEnabled(true);
+    setShowVaMeterChk->setChecked(true);
+    setFunctionForm->addRow(tr("Show V/A 4th Meter Row"), setShowVaMeterChk);
+    QLabel *setToneHdr = new QLabel(tr("<b>RX / TX Tone Control</b>"), extSetPage);
+    setToneForm->addRow(setToneHdr);
+
+    auto setMakeTone = [=](const char *name) -> QSpinBox* {
+        QSpinBox *w = extMakeSpin(name, -5, 5, false);
+        return w;
+    };
+
+    QSpinBox *setSsbRxBass = setMakeTone("setSsbRxBass");
+    QSpinBox *setSsbRxTreble = setMakeTone("setSsbRxTreble");
+    QSpinBox *setAmRxBass = setMakeTone("setAmRxBass");
+    QSpinBox *setAmRxTreble = setMakeTone("setAmRxTreble");
+    QSpinBox *setFmRxBass = setMakeTone("setFmRxBass");
+    QSpinBox *setFmRxTreble = setMakeTone("setFmRxTreble");
+    QSpinBox *setSsbTxBass = setMakeTone("setSsbTxBass");
+    QSpinBox *setSsbTxTreble = setMakeTone("setSsbTxTreble");
+    QSpinBox *setAmTxBass = setMakeTone("setAmTxBass");
+    QSpinBox *setAmTxTreble = setMakeTone("setAmTxTreble");
+    QSpinBox *setFmTxBass = setMakeTone("setFmTxBass");
+    QSpinBox *setFmTxTreble = setMakeTone("setFmTxTreble");
+
+    setToneForm->addRow(tr("SSB RX Bass"), setSsbRxBass);
+    setToneForm->addRow(tr("SSB RX Treble"), setSsbRxTreble);
+    setToneForm->addRow(tr("AM RX Bass"), setAmRxBass);
+    setToneForm->addRow(tr("AM RX Treble"), setAmRxTreble);
+    setToneForm->addRow(tr("FM RX Bass"), setFmRxBass);
+    setToneForm->addRow(tr("FM RX Treble"), setFmRxTreble);
+    setToneForm->addRow(tr("SSB TX Bass"), setSsbTxBass);
+    setToneForm->addRow(tr("SSB TX Treble"), setSsbTxTreble);
+    setToneForm->addRow(tr("AM TX Bass"), setAmTxBass);
+    setToneForm->addRow(tr("AM TX Treble"), setAmTxTreble);
+    setToneForm->addRow(tr("FM TX Bass"), setFmTxBass);
+    setToneForm->addRow(tr("FM TX Treble"), setFmTxTreble);
+
+    QLabel *setBeepHdr = new QLabel(tr("<b>Beep / Control</b>"), extSetPage);
+    setFunctionForm->addRow(setBeepHdr);
+
+    QSpinBox *setBeepLevelSpin = extMakeSpin("setBeepLevelSpin", 0, 100, false);
+    setBeepLevelSpin->setSuffix(tr("%"));
+    setFunctionForm->addRow(tr("Beep Level"), setBeepLevelSpin);
+
+    QCheckBox *setBeepLimitChk = extMakeCheck("setBeepLimitChk");
+    setFunctionForm->addRow(tr("Beep Level Limit"), setBeepLimitChk);
+
+    QCheckBox *setBeepConfirmChk = extMakeCheck("setBeepConfirmChk");
+    setFunctionForm->addRow(tr("Beep Confirmation"), setBeepConfirmChk);
+
+    QComboBox *setBandEdgeBeepCombo = new QComboBox(ext7610Dialog);
+    setBandEdgeBeepCombo->setObjectName(QStringLiteral("setBandEdgeBeepCombo"));
+    setBandEdgeBeepCombo->setEnabled(false);
+    setBandEdgeBeepCombo->addItem(tr("OFF"), 0);
+    setBandEdgeBeepCombo->addItem(tr("ON (Default)"), 1);
+    setBandEdgeBeepCombo->addItem(tr("ON (User)"), 2);
+    setBandEdgeBeepCombo->addItem(tr("ON (User) + TX Limit"), 3);
+    setBandEdgeBeepCombo->setCurrentIndex(-1);
+    setFunctionForm->addRow(tr("Band Edge Beep"), setBandEdgeBeepCombo);
+
+    QComboBox *setRfSqlCombo = new QComboBox(ext7610Dialog);
+    setRfSqlCombo->setObjectName(QStringLiteral("setRfSqlCombo"));
+    setRfSqlCombo->setEnabled(false);
+    setRfSqlCombo->addItem(tr("AUTO"), 0);
+    setRfSqlCombo->addItem(tr("SQL"), 1);
+    setRfSqlCombo->addItem(tr("RF + SQL"), 2);
+    setRfSqlCombo->setCurrentIndex(-1);
+    setFunctionForm->addRow(tr("RF/SQL Control"), setRfSqlCombo);
+
+    auto setMakeTxDelay = [=](const char *name) -> QComboBox* {
+        QComboBox *w = new QComboBox(ext7610Dialog);
+        w->setObjectName(QString::fromLatin1(name));
+        w->setEnabled(false);
+        w->addItem(tr("OFF"), 0);
+        w->addItem(tr("10 ms"), 1);
+        w->addItem(tr("15 ms"), 2);
+        w->addItem(tr("20 ms"), 3);
+        w->addItem(tr("25 ms"), 4);
+        w->addItem(tr("30 ms"), 5);
+        w->setCurrentIndex(-1);
+        return w;
+    };
+
+    QComboBox *setTxDelayHfCombo = setMakeTxDelay("setTxDelayHfCombo");
+    QComboBox *setTxDelay50Combo = setMakeTxDelay("setTxDelay50Combo");
+    setFunctionForm->addRow(tr("TX Delay HF"), setTxDelayHfCombo);
+    setFunctionForm->addRow(tr("TX Delay 50 MHz"), setTxDelay50Combo);
+
+    // Fix the DPI/font clipping seen on the test PC. Qt scales these logical
+    // pixels for device DPI; sizeHint keeps native style metrics respected.
+    extRxForm->setVerticalSpacing(8);
+    extTxForm->setVerticalSpacing(8);
+
+    const QList<QSpinBox*> extSpins =
+            ext7610Dialog->findChildren<QSpinBox*>();
+    for (QSpinBox *w : extSpins) {
+        w->setMinimumHeight(qMax(30, w->sizeHint().height() + 8));
+        w->setMinimumWidth(qMax(170, w->sizeHint().width() + 20));
+    }
+
+    const QList<QComboBox*> extCombos =
+            ext7610Dialog->findChildren<QComboBox*>();
+    for (QComboBox *w : extCombos) {
+        w->setMinimumHeight(qMax(30, w->sizeHint().height() + 8));
+        w->setMinimumWidth(qMax(170, w->sizeHint().width() + 20));
+    }
+    // IC7610_V23_SET_TAB_END
+    QPushButton *ext7610RefreshBtn = new QPushButton(tr("Refresh from Radio"), ext7610Dialog);
+    ext7610RefreshBtn->setObjectName(QStringLiteral("ext7610RefreshBtn"));
+    extButtonLayout->addWidget(ext7610RefreshBtn);
+
+    QPushButton *ext7610CloseBtn = new QPushButton(tr("Close"), ext7610Dialog);
+    ext7610CloseBtn->setObjectName(QStringLiteral("ext7610CloseBtn"));
+    extButtonLayout->addWidget(ext7610CloseBtn);
+
+    extRootLayout->addLayout(extButtonLayout);
+    // IC7610_EXT_DIALOG_END
+
     connect(
                 ui->txPowerSlider, &QSlider::valueChanged, this,
                 [=](const int &newValue) {
@@ -1177,6 +2576,18 @@ void wfmain::configureVFOs()
         colorPrefsType p = colorPreset[prefs.currentColorPresetNumber];
         receiver->colorPreset(&p);
         receiver->setIdentity(i==0?"Main Band":"Sub Band");
+        // IC7610_V23_CONNECT_RECEIVER_EXT
+        connect(receiver, &receiverWidget::requestIC7610Ext,
+                this, [=](uchar rx) {
+            // v23 exposes the strip button only on MAIN, but preserve the
+            // receiver argument so this is safe if SUB support is added later.
+            currentReceiver = rx;
+            QPushButton *legacyExt =
+                    findChild<QPushButton*>(
+                        QStringLiteral("ext7610Btn"));
+            if (legacyExt != Q_NULLPTR)
+                legacyExt->click();
+        });
         ui->vfoLayout->addWidget(receiver);
 
         // Hide any secondary receivers until we need them!
@@ -4017,6 +5428,45 @@ void wfmain:: getInitialRigState()
     {
         queue->add(priorityHigh,queueItem(funcVOIP,QVariant::fromValue<uchar>(prefs.rxSetup.codec==0x80?2:1),false,0));
     }
+    // IC7610_EXT_INITIAL_READ_BEGIN
+    auto ext7610InitialRead = [=](funcs f) {
+        auto it = rigCaps->commands.find(f);
+        if (it == rigCaps->commands.end() || !it->getCmd)
+            return;
+        const uchar target = it->cmd29 ? currentReceiver : 0;
+        queue->add(priorityImmediate, f, false, target);
+    };
+
+    ext7610InitialRead(funcAGC);
+    ext7610InitialRead(funcAGCTimeConstant);
+    ext7610InitialRead(funcAudioPeakFilter);
+    ext7610InitialRead(funcAPFLevel);
+    ext7610InitialRead(funcAPFType);
+    ext7610InitialRead(funcAPFTypeLevel);
+    ext7610InitialRead(funcNRLevel);
+    ext7610InitialRead(funcNBLevel);
+    ext7610InitialRead(funcNBDepth);
+    ext7610InitialRead(funcNBWidth);
+    ext7610InitialRead(funcAutoNotch);
+    ext7610InitialRead(funcManualNotch);
+    ext7610InitialRead(funcNotchFilter);
+    ext7610InitialRead(funcManualNotchWidth);
+    ext7610InitialRead(funcAFMute);
+    ext7610InitialRead(funcDigiSel);
+    ext7610InitialRead(funcDigiSelShift);
+    ext7610InitialRead(funcTwinPeakFilter);
+    ext7610InitialRead(funcDialLock);
+    ext7610InitialRead(funcMainSubTracking);
+    ext7610InitialRead(funcCompressorLevel);
+    ext7610InitialRead(funcDriveGain);
+    ext7610InitialRead(funcVoxGain);
+    ext7610InitialRead(funcAntiVoxGain);
+    ext7610InitialRead(funcVOXDelay);
+    ext7610InitialRead(funcVOXVoiceDelay);
+    ext7610InitialRead(funcBreakIn);
+    ext7610InitialRead(funcBreakInDelay);
+    ext7610InitialRead(funcSSBTXBandwidth);
+    // IC7610_EXT_INITIAL_READ_END
     // Put Kenwood into Shift&Width mode for filter control.
     queue->add(priorityHigh,queueItem(funcFilterControlSSB,QVariant::fromValue<bool>(true),false,0));
     queue->add(priorityHigh,queueItem(funcFilterControlData,QVariant::fromValue<bool>(true),false,0));
@@ -4212,6 +5662,12 @@ void wfmain::initPeriodicCommands()
     }
 
 
+    // IC7610_V30_VA_PERIODIC
+    // Independent telemetry for the optional fourth V/A meter row.
+    if (rigCaps->commands.contains(funcVdMeter))
+        queue->add(priorityMediumHigh, funcVdMeter, true, 0);
+    if (rigCaps->commands.contains(funcIdMeter))
+        queue->add(priorityMediumHigh, funcIdMeter, true, 0);
     // Set the second meter here as I suspect we need to be connected for it to work?
     if (!rigCaps->commands.contains(funcMeterType))
     {
@@ -5980,6 +7436,524 @@ void wfmain::receiveValue(cacheItem val){
     }
     */
 
+// IC7610_EXT_MIRROR_BEGIN
+    auto ext7610ValueApplies = [&](funcs f) -> bool {
+        auto it = rigCaps->commands.find(f);
+        if (it == rigCaps->commands.end())
+            return false;
+        return (!it->cmd29 || val.receiver == currentReceiver);
+    };
+
+    auto ext7610SetSpin = [&](const char *name, funcs f, int value) {
+        if (!ext7610ValueApplies(f))
+            return;
+        QSpinBox *w = findChild<QSpinBox*>(QString::fromLatin1(name));
+        if (w != Q_NULLPTR) {
+            w->blockSignals(true);
+            w->setValue(value);
+            w->blockSignals(false);
+        }
+    };    auto ext7610SetMappedSpin = [&](const char *name,
+                                    funcs f,
+                                    int raw,
+                                    int rawMin,
+                                    int rawMax,
+                                    int displayMin,
+                                    int displayMax,
+                                    int displayStep) {
+        if (!ext7610ValueApplies(f) || rawMax == rawMin)
+            return;
+
+        QSpinBox *w = findChild<QSpinBox*>(QString::fromLatin1(name));
+        if (w == Q_NULLPTR)
+            return;
+
+        int display =
+                displayMin +
+                static_cast<int>(
+                    ((static_cast<qint64>(raw - rawMin) *
+                      static_cast<qint64>(displayMax - displayMin)) +
+                     ((rawMax - rawMin) / 2)) /
+                    (rawMax - rawMin));
+
+        if (display < displayMin)
+            display = displayMin;
+        if (display > displayMax)
+            display = displayMax;
+
+        if (displayStep > 1) {
+            if (display >= 0)
+                display = ((display + (displayStep / 2)) / displayStep) * displayStep;
+            else
+                display = -(((-display + (displayStep / 2)) / displayStep) * displayStep);
+        }
+
+        w->blockSignals(true);
+        w->setValue(display);
+        w->blockSignals(false);
+    };
+ auto ext7610SetCombo = [&](const char *name, funcs f, int value) {
+        if (!ext7610ValueApplies(f))
+            return;
+        QComboBox *w = findChild<QComboBox*>(QString::fromLatin1(name));
+        if (w != Q_NULLPTR) {
+            const int index = w->findData(value);
+            if (index >= 0) {
+                w->blockSignals(true);
+                w->setCurrentIndex(index);
+                w->blockSignals(false);
+            }
+        }
+    };
+
+    auto ext7610SetCheck = [&](const char *name, funcs f, bool value) {
+        if (!ext7610ValueApplies(f))
+            return;
+        QCheckBox *w = findChild<QCheckBox*>(QString::fromLatin1(name));
+        if (w != Q_NULLPTR) {
+            w->blockSignals(true);
+            w->setChecked(value);
+            w->blockSignals(false);
+        }
+    };
+
+    // IC7610_V23_SET_RX_HELPERS
+    auto set7610EnableWidget = [&](const char *name) {
+        QWidget *w = findChild<QWidget*>(QString::fromLatin1(name));
+        if (w != Q_NULLPTR)
+            w->setEnabled(true);
+    };
+
+    auto set7610SpinDirect = [&](const char *name, funcs f, int value) {
+        ext7610SetSpin(name, f, value);
+        set7610EnableWidget(name);
+    };
+
+    auto set7610SpinMapped = [&](const char *name, funcs f, int raw,
+                                 int rawMin, int rawMax,
+                                 int displayMin, int displayMax) {
+        ext7610SetMappedSpin(
+                    name, f, raw, rawMin, rawMax,
+                    displayMin, displayMax, 1);
+        set7610EnableWidget(name);
+    };
+
+    auto set7610Tone = [&](const char *name, funcs f, int raw) {
+        ext7610SetSpin(name, f, raw - 5);
+        set7610EnableWidget(name);
+    };
+
+    auto set7610Combo = [&](const char *name, funcs f, int value) {
+        ext7610SetCombo(name, f, value);
+        set7610EnableWidget(name);
+    };
+
+    auto set7610Check = [&](const char *name, funcs f, bool value) {
+        ext7610SetCheck(name, f, value);
+        set7610EnableWidget(name);
+    };
+    switch (val.command)
+    {
+    case funcAGCTimeConstant:
+        ext7610SetCombo("agcTcCombo", val.command, val.value.value<uchar>());
+        break;
+    case funcAudioPeakFilter:
+        ext7610SetCombo("apfModeCombo", val.command, val.value.value<uchar>());
+        break;
+    case funcAPFLevel:
+        ext7610SetMappedSpin("apfPositionSpin", val.command, val.value.value<uchar>(), 0, 255, -550, 550, 10);
+        break;
+    case funcAPFType:
+        ext7610SetCombo("apfTypeCombo", val.command, val.value.value<uchar>());
+        break;
+    case funcAPFTypeLevel:
+        ext7610SetSpin("apfAfLevelSpin", val.command, val.value.value<uchar>());
+        break;
+    case funcNRLevel:
+        ext7610SetMappedSpin("nrLevelSpin", val.command, val.value.value<uchar>(), 8, 248, 0, 15, 1);
+        break;
+    case funcNBLevel:
+        ext7610SetMappedSpin("nbLevelSpin", val.command, val.value.value<uchar>(), 0, 255, 0, 100, 1);
+        break;
+    case funcNBDepth:
+        ext7610SetMappedSpin("nbDepthSpin", val.command, val.value.value<uchar>(), 0, 9, 1, 10, 1);
+        break;
+    case funcNBWidth:
+        ext7610SetMappedSpin("nbWidthSpin", val.command, val.value.value<uchar>(), 0, 255, 1, 100, 1);
+        break;
+    case funcAutoNotch:
+        ext7610SetCheck("autoNotchChk", val.command, val.value.value<bool>());
+        ext7610SetCheck("mainAutoNotchChk", val.command, val.value.value<bool>()); // IC7610_V43_FINAL_MAIN_NOTCH_RX
+        {
+            QCheckBox *w =
+                    findChild<QCheckBox*>(
+                        QStringLiteral("mainAutoNotchChk"));
+            if (w != Q_NULLPTR)
+                w->setEnabled(true);
+        }
+        break;
+    case funcManualNotch:
+        ext7610SetCheck("manualNotchChk", val.command, val.value.value<bool>());
+        ext7610SetCheck("mainManualNotchChk", val.command, val.value.value<bool>());
+        {
+            QCheckBox *w =
+                    findChild<QCheckBox*>(
+                        QStringLiteral("mainManualNotchChk"));
+            if (w != Q_NULLPTR)
+                w->setEnabled(true);
+        }
+        break;
+    case funcNotchFilter:
+        // IC7610_V23_NOTCH_RX
+        // IC7610_V45_NOTCH_CENTER_RX
+        // IC-7610 CI-V 14 0D: 0000=max CCW, 0128=center, 0255=max CW.
+        // Use separate 128-step and 127-step halves so center is exactly 0%.
+        {
+            const int v45NotchRaw =
+                    static_cast<int>(
+                        val.value.value<uchar>());
+
+            const int v45NotchPercent =
+                    (v45NotchRaw <= 128)
+                        ? qRound(
+                              (static_cast<double>(v45NotchRaw) - 128.0) *
+                              100.0 / 128.0)
+                        : qRound(
+                              (static_cast<double>(v45NotchRaw) - 128.0) *
+                              100.0 / 127.0);
+
+            ext7610SetSpin(
+                    "notchPositionSpin",
+                    val.command,
+                    qBound(-100, v45NotchPercent, 100));
+
+            ext7610SetSpin(
+                    "mainNotchPositionSpin",
+                    val.command,
+                    qBound(-100, v45NotchPercent, 100));
+            // IC7610_V46_NOTCH_RAW_TOOLTIP
+            // Keep the human-friendly percent display, but expose the radio's
+            // actual 14 0D value for field verification.
+            const QString v46NotchTip =
+                    tr("Manual Notch Position: CI-V raw %1; "
+                       "0128 is documented center; display %2%")
+                        .arg(v45NotchRaw, 4, 10, QChar('0'))
+                        .arg(v45NotchPercent);
+
+            QSpinBox *v46ExtNotch =
+                    findChild<QSpinBox*>(
+                        QStringLiteral("notchPositionSpin"));
+            if (v46ExtNotch != Q_NULLPTR) {
+                v46ExtNotch->setToolTip(v46NotchTip);
+                // IC7610_V47_NOTCH_RX_LAST
+                v46ExtNotch->setProperty(
+                        "ic7610LastRxPercent",
+                        qBound(-100, v45NotchPercent, 100));
+            }
+            qInfo(logRig()) << "IC7610 v47 notch RX: raw"
+                            << v45NotchRaw << "percent"
+                            << v45NotchPercent << "rx"
+                            << val.receiver;
+
+            QSpinBox *v46MainNotch =
+                    findChild<QSpinBox*>(
+                        QStringLiteral("mainNotchPositionSpin"));
+            if (v46MainNotch != Q_NULLPTR) {
+                v46MainNotch->setToolTip(v46NotchTip);
+                v46MainNotch->setProperty(
+                        "ic7610LastRxPercent",
+                        qBound(-100, v45NotchPercent, 100));
+            }
+        }
+        {
+            QSpinBox *w =
+                    findChild<QSpinBox*>(
+                        QStringLiteral("mainNotchPositionSpin"));
+            if (w != Q_NULLPTR)
+                w->setEnabled(true);
+        }
+        break;
+    case funcManualNotchWidth:
+        ext7610SetCombo("manualNotchWidthCombo", val.command, val.value.value<uchar>());
+        break;
+    case funcAFMute:
+        ext7610SetCheck("afMuteChk", val.command, val.value.value<bool>());
+        break;
+    case funcDigiSelShift:
+        ext7610SetMappedSpin("digiSelShiftSpin", val.command, val.value.value<uchar>(), 0, 255, -100, 100, 1); // IC7610_V23_DIGISEL_RX
+        break;
+    case funcTwinPeakFilter:
+        ext7610SetCheck("twinPeakChk", val.command, val.value.value<bool>());
+        break;
+    case funcDialLock:
+        ext7610SetCheck("dialLockChk", val.command, val.value.value<bool>());
+        break;
+    case funcMainSubTracking:
+        ext7610SetCheck("mainSubTrackingChk", val.command, val.value.value<bool>());
+        break;
+    case funcCompressorLevel:
+        ext7610SetMappedSpin("compLevelSpin", val.command, val.value.value<uchar>(), 0, 255, 0, 10, 1);
+        break;
+    case funcDriveGain:
+        ext7610SetMappedSpin("driveGainSpin", val.command, val.value.value<uchar>(), 0, 255, 0, 100, 1);
+        break;
+    case funcVoxGain:
+        ext7610SetMappedSpin("voxGainSpin", val.command, val.value.value<uchar>(), 0, 255, 0, 100, 1);
+        break;
+    case funcAntiVoxGain:
+        ext7610SetMappedSpin("antiVoxGainSpin", val.command, val.value.value<uchar>(), 0, 255, 0, 100, 1);
+        break;
+    case funcVOXDelay:
+        ext7610SetSpin("voxDelaySpin", val.command, val.value.value<uchar>());
+        break;
+    case funcVOXVoiceDelay:
+        ext7610SetCombo("voxVoiceDelayCombo", val.command, val.value.value<uchar>());
+        break;
+    case funcBreakIn:
+        ext7610SetCombo("breakInModeCombo", val.command, val.value.value<uchar>());
+        break;
+    case funcBreakInDelay:
+        ext7610SetMappedSpin("breakInDelaySpin", val.command, val.value.value<uchar>(), 0, 255, 20, 130, 1);
+        break;
+    case funcSSBTXBandwidth:
+        ext7610SetCombo("ssbTxBwCombo", val.command, val.value.value<uchar>());
+        break;
+    // IC7610_V23_SET_RX_CASES
+    // IC7610_V27_SET_RX_CASES
+    case funcACCOutputSelect:
+        set7610Combo("setAccOutputSelect", val.command, val.value.value<uchar>());
+        break;
+    case funcACCAFOutputLevel:
+        set7610SpinMapped("setAccAfOutputSpin", val.command, val.value.value<uchar>(), 0, 255, 0, 100);
+        break;
+    case funcACCIFOutputLevel:
+        set7610SpinMapped("setAccIfOutputSpin", val.command, val.value.value<uchar>(), 0, 255, 0, 100);
+        break;
+    case funcUSBOutputSelect:
+        set7610Combo("setUsbOutputSelect", val.command, val.value.value<uchar>());
+        break;
+    case funcUSBAFOutputLevel:
+        set7610SpinMapped("setUsbAfOutputSpin", val.command, val.value.value<uchar>(), 0, 255, 0, 100);
+        break;
+    case funcUSBIFOutputLevel:
+        set7610SpinMapped("setUsbIfOutputSpin", val.command, val.value.value<uchar>(), 0, 255, 0, 100);
+        break;
+    case funcLANOutputSelect:
+        set7610Combo("setLanOutputSelect", val.command, val.value.value<uchar>());
+        break;
+    case funcREFInput:
+        set7610Combo("setRefInputCombo", val.command, val.value.value<uchar>());
+        break;    // IC7610_V37_SET_RX_CASES
+    // IC7610_V39_RTTY_SET_RX_CASES
+    case func7610ExternalKeypadRTTY:
+        set7610Check("setExternalKeypadRttyChk", val.command,
+                     val.value.value<uchar>() != 0);
+        break;
+    case func7610DecodeBaud:
+        set7610Combo("setDecodeBaudCombo", val.command,
+                     val.value.value<uchar>());
+        break;
+    case func7610RTTYFFTAverage:
+        set7610Combo("setRttyFftAvgCombo", val.command,
+                     val.value.value<uchar>());
+        break;
+    case func7610RTTYDecodeUSOS:
+        set7610Check("setRttyDecodeUsosChk", val.command,
+                     val.value.value<uchar>() != 0);
+        break;
+    case func7610RTTYNewLine:
+        set7610Combo("setRttyNewLineCombo", val.command,
+                     val.value.value<uchar>());
+        break;
+    case func7610RTTYDiddle:
+        set7610Combo("setRttyDiddleCombo", val.command,
+                     val.value.value<uchar>());
+        break;
+    case func7610RTTYTXUSOS:
+        set7610Check("setRttyTxUsosChk", val.command,
+                     val.value.value<uchar>() != 0);
+        break;
+    case func7610RTTYAutoCRLF:
+        set7610Check("setRttyAutoCrlfChk", val.command,
+                     val.value.value<uchar>() != 0);
+        break;
+    case func7610RTTYTimestamp:
+        set7610Check("setRttyTimestampChk", val.command,
+                     val.value.value<uchar>() != 0);
+        break;
+    case func7610RTTYTimestampTime:
+        set7610Combo("setRttyTimestampTimeCombo", val.command,
+                     val.value.value<uchar>());
+        break;
+    case func7610RTTYTimestampFreq:
+        set7610Check("setRttyTimestampFreqChk", val.command,
+                     val.value.value<uchar>() != 0);
+        break;
+    case func7610RTTYDecodeLog:
+        set7610Check("setRttyDecodeLogChk", val.command,
+                     val.value.value<uchar>() != 0);
+        break;
+    case func7610RTTYLogFileType:
+        set7610Combo("setRttyLogFileTypeCombo", val.command,
+                     val.value.value<uchar>());
+        break;
+    case func7610CIVTimeout:
+        set7610Combo("setCivTimeoutCombo", val.command,
+                     val.value.value<uchar>());
+        break;
+    case func7610RTTYMarkFreq:
+        set7610Combo("setRttyMarkCombo", val.command,
+                     val.value.value<uchar>());
+        break;
+    case func7610RTTYShiftWidth:
+        set7610Combo("setRttyShiftCombo", val.command,
+                     val.value.value<uchar>());
+        break;
+    case func7610RTTYKeyPolarity:
+        set7610Combo("setRttyPolarityCombo", val.command,
+                     val.value.value<uchar>());
+        break;
+    case func7610SSBCWSyncTune:
+        set7610Check("setCwSyncChk", val.command,
+                     val.value.value<uchar>() != 0);
+        break;
+    case func7610CWNormalSide:
+        set7610Combo("setCwNormalSideCombo", val.command,
+                     val.value.value<uchar>());
+        break;
+    case func7610USBKeyCW:
+        set7610Combo("setUsbKeyCwCombo", val.command,
+                     val.value.value<uchar>());
+        break;
+    case func7610USBKeyRTTY:
+        set7610Combo("setUsbKeyRttyCombo", val.command,
+                     val.value.value<uchar>());
+        break;
+    case func7610CIVRemoteAddress:
+        set7610Combo("setCivRemoteAddrCombo", val.command,
+                     val.value.value<uchar>());
+        break;
+    case func7610CIVUSBPort:
+        set7610Combo("setCivUsbPortCombo", val.command,
+                     val.value.value<uchar>());
+        break;
+    case func7610CIVUSBEcho:
+        set7610Check("setCivUsbEchoChk", val.command,
+                     val.value.value<uchar>() != 0);
+        break;
+    case func7610SideToneLevel:
+        set7610SpinMapped(
+            "setSideToneLevelSpin", val.command,
+            val.value.value<uchar>(), 0, 255, 0, 100);
+        break;
+    case func7610SideToneLimit:
+        set7610Check("setSideToneLimitChk", val.command,
+                     val.value.value<uchar>() != 0);
+        break;
+    case func7610KeyerRepeat:
+        set7610SpinDirect(
+            "setKeyerRepeatSpin", val.command,
+            val.value.value<uchar>());
+        break;
+    case func7610CWRiseTime:
+        set7610Combo("setCwRiseCombo", val.command,
+                     val.value.value<uchar>());
+        break;
+    case func7610PaddlePolarity:
+        set7610Combo("setPaddlePolarityCombo", val.command,
+                     val.value.value<uchar>());
+        break;
+    case func7610KeyType:
+        set7610Combo("setKeyTypeCombo", val.command,
+                     val.value.value<uchar>());
+        break;
+    case func7610MicUpDownKeyer:
+        set7610Check("setMicUpDownKeyerChk", val.command,
+                     val.value.value<uchar>() != 0);
+        break;    case funcQuickDualWatch:
+        set7610Check("setQuickDualChk", val.command, val.value.value<bool>());
+        break;
+    case funcQuickSplit:
+        set7610Check("setQuickSplitChk", val.command, val.value.value<uchar>() != 0);
+        break;
+    case funcCIVTransceive:
+        set7610Check("setCivTransceiveChk", val.command, val.value.value<bool>());
+        break;
+    case funcCIVOutput:
+        set7610Check("setCivOutputChk", val.command, val.value.value<bool>());
+        break;
+    case funcDashRatio:
+        set7610SpinDirect("setDashRatioSpin", val.command, val.value.value<uchar>());
+        break;
+    case funcACCAModLevel:
+        set7610SpinMapped("setAccModSpin", val.command, val.value.value<uchar>(), 0, 255, 0, 100);
+        break;
+    case funcUSBModLevel:
+        set7610SpinMapped("setUsbModSpin", val.command, val.value.value<uchar>(), 0, 255, 0, 100);
+        break;
+    case funcLANModLevel:
+        set7610SpinMapped("setLanModSpin", val.command, val.value.value<uchar>(), 0, 255, 0, 100);
+        break;
+    case funcSSBRXBass:
+        set7610Tone("setSsbRxBass", val.command, val.value.value<uchar>());
+        break;
+    case funcSSBRXTreble:
+        set7610Tone("setSsbRxTreble", val.command, val.value.value<uchar>());
+        break;
+    case funcAMRXBass:
+        set7610Tone("setAmRxBass", val.command, val.value.value<uchar>());
+        break;
+    case funcAMRXTreble:
+        set7610Tone("setAmRxTreble", val.command, val.value.value<uchar>());
+        break;
+    case funcFMRXBass:
+        set7610Tone("setFmRxBass", val.command, val.value.value<uchar>());
+        break;
+    case funcFMRXTreble:
+        set7610Tone("setFmRxTreble", val.command, val.value.value<uchar>());
+        break;
+    case funcSSBTXBass:
+        set7610Tone("setSsbTxBass", val.command, val.value.value<uchar>());
+        break;
+    case funcSSBTXTreble:
+        set7610Tone("setSsbTxTreble", val.command, val.value.value<uchar>());
+        break;
+    case funcAMTXBass:
+        set7610Tone("setAmTxBass", val.command, val.value.value<uchar>());
+        break;
+    case funcAMTXTreble:
+        set7610Tone("setAmTxTreble", val.command, val.value.value<uchar>());
+        break;
+    case funcFMTXBass:
+        set7610Tone("setFmTxBass", val.command, val.value.value<uchar>());
+        break;
+    case funcFMTXTreble:
+        set7610Tone("setFmTxTreble", val.command, val.value.value<uchar>());
+        break;
+    case funcBeepLevel:
+        set7610SpinMapped("setBeepLevelSpin", val.command, val.value.value<uchar>(), 0, 255, 0, 100);
+        break;
+    case funcBeepLevelLimit:
+        set7610Check("setBeepLimitChk", val.command, val.value.value<bool>());
+        break;
+    case funcBeepConfirmation:
+        set7610Check("setBeepConfirmChk", val.command, val.value.value<bool>());
+        break;
+    case funcBandEdgeBeep:
+        set7610Combo("setBandEdgeBeepCombo", val.command, val.value.value<uchar>());
+        break;
+    case funcRFSQLControl:
+        set7610Combo("setRfSqlCombo", val.command, val.value.value<uchar>());
+        break;
+    case funcTXDelayHF:
+        set7610Combo("setTxDelayHfCombo", val.command, val.value.value<uchar>());
+        break;
+    case funcTXDelay50m:
+        set7610Combo("setTxDelay50Combo", val.command, val.value.value<uchar>());
+        break;    default:
+        break;
+    }
+    // IC7610_EXT_MIRROR_END
     switch (val.command)
     {
 #if defined __GNUC__
@@ -6060,6 +8034,52 @@ void wfmain::receiveValue(cacheItem val){
                 rx->updateInfo();
             }
             currentReceiver = r;
+            // IC7610_EXT_RECEIVER_READ_BEGIN
+            QLabel *ext7610ReceiverLabel =
+                    findChild<QLabel*>(QStringLiteral("ext7610ReceiverLabel"));
+            if (ext7610ReceiverLabel != Q_NULLPTR) {
+                ext7610ReceiverLabel->setText(
+                            currentReceiver ? tr("Receiver: SUB") : tr("Receiver: MAIN"));
+            }
+
+            auto ext7610ReceiverRead = [=](funcs f) {
+                auto it = rigCaps->commands.find(f);
+                if (it == rigCaps->commands.end() || !it->getCmd)
+                    return;
+                const uchar target = it->cmd29 ? currentReceiver : 0;
+                queue->add(priorityImmediate, f, false, target);
+            };
+
+            ext7610ReceiverRead(funcAGC);
+            ext7610ReceiverRead(funcAGCTimeConstant);
+            ext7610ReceiverRead(funcAudioPeakFilter);
+            ext7610ReceiverRead(funcAPFLevel);
+            ext7610ReceiverRead(funcAPFType);
+            ext7610ReceiverRead(funcAPFTypeLevel);
+            ext7610ReceiverRead(funcNRLevel);
+            ext7610ReceiverRead(funcNBLevel);
+            ext7610ReceiverRead(funcNBDepth);
+            ext7610ReceiverRead(funcNBWidth);
+            ext7610ReceiverRead(funcAutoNotch);
+            ext7610ReceiverRead(funcManualNotch);
+            ext7610ReceiverRead(funcNotchFilter);
+            ext7610ReceiverRead(funcManualNotchWidth);
+            ext7610ReceiverRead(funcAFMute);
+            ext7610ReceiverRead(funcDigiSel);
+            ext7610ReceiverRead(funcDigiSelShift);
+            ext7610ReceiverRead(funcTwinPeakFilter);
+            ext7610ReceiverRead(funcDialLock);
+            ext7610ReceiverRead(funcMainSubTracking);
+            ext7610ReceiverRead(funcCompressorLevel);
+            ext7610ReceiverRead(funcDriveGain);
+            ext7610ReceiverRead(funcVoxGain);
+            ext7610ReceiverRead(funcAntiVoxGain);
+            ext7610ReceiverRead(funcVOXDelay);
+            ext7610ReceiverRead(funcVOXVoiceDelay);
+            ext7610ReceiverRead(funcBreakIn);
+            ext7610ReceiverRead(funcBreakInDelay);
+            ext7610ReceiverRead(funcSSBTXBandwidth);
+            // IC7610_EXT_RECEIVER_READ_END
         }
         break;
     }
@@ -6140,6 +8160,11 @@ void wfmain::receiveValue(cacheItem val){
         // Also send to CW window
         if (cw != Q_NULLPTR) {
             cw->handlePitch(val.value.value<quint16>());
+        }
+        // IC7610_V49_CW_DECODER_PITCH
+        if (auto *cwDec = findChild<Ic7610CwDecoderWindow*>(
+                    QStringLiteral("ic7610CwDecoderWin"), Qt::FindDirectChildrenOnly)) {
+            cwDec->setRadioPitch(static_cast<int>(val.value.value<quint16>()));
         }
         break;
 
@@ -6236,15 +8261,81 @@ void wfmain::receiveValue(cacheItem val){
         break;
     case funcVdMeter:
         receiveMeter(meter_t::meterVoltage,val.value.value<double>());
-        break;
+        // IC7610_V30_VA_RECEIVE
+        {
+            const double vd = val.value.value<double>();
+            QProgressBar *bar =
+                    findChild<QProgressBar*>(QStringLiteral("ic7610VdBar"));
+            QLabel *text =
+                    findChild<QLabel*>(QStringLiteral("ic7610VdText"));
+            if (bar != Q_NULLPTR)
+                bar->setValue(qBound(100, qRound(vd * 10.0), 160));
+            // IC7610_V35_VD_COLOR
+            if (bar != Q_NULLPTR) {
+                QString color;
+                if ((vd < 11.9) || (vd >= 15.4))
+                    color = QStringLiteral("#d83b3b");
+                else if ((vd < 12.2) || (vd > 15.18))
+                    color = QStringLiteral("#d49a00");
+                else
+                    color = QStringLiteral("#2e9d50");
+
+                bar->setStyleSheet(
+                    QStringLiteral(
+                        "QProgressBar::chunk { background-color: %1; }")
+                    .arg(color));
+            } // IC7610_V32_VD_SCALE
+            if (text != Q_NULLPTR)
+                text->setText(QStringLiteral("%1 V").arg(vd, 0, 'f', 1));
+        }        break;
     case funcIdMeter:
         receiveMeter(meter_t::meterCurrent,val.value.value<double>());
-        break;
+        {
+            const double amps = val.value.value<double>();
+            QProgressBar *bar =
+                    findChild<QProgressBar*>(QStringLiteral("ic7610IdBar"));
+            QLabel *text =
+                    findChild<QLabel*>(QStringLiteral("ic7610IdText"));
+            if (bar != Q_NULLPTR)
+                bar->setValue(qBound(0, qRound(amps * 10.0), 300));
+            // IC7610_V35_ID_COLOR
+            if (bar != Q_NULLPTR) {
+                const QString color =
+                    (amps <= 23.0)
+                    ? QStringLiteral("#2e9d50")
+                    : QStringLiteral("#d49a00");
+
+                bar->setStyleSheet(
+                    QStringLiteral(
+                        "QProgressBar::chunk { background-color: %1; }")
+                    .arg(color));
+            }
+            if (text != Q_NULLPTR)
+                text->setText(QStringLiteral("%1 A").arg(amps, 0, 'f', 1));
+        }        break;
     // 0x16 enable/disable functions:
     case funcPreamp:
         receivePreamp(val.value.value<uchar>(),val.receiver);
         break;
     case funcAGC:
+    {
+        QComboBox *agcSelCombo = findChild<QComboBox*>(QStringLiteral("agcSelCombo"));
+        if (agcSelCombo != Q_NULLPTR && val.receiver == currentReceiver) {
+            const int agc = static_cast<int>(val.value.value<uchar>());
+            const int index = agcSelCombo->findData(agc);
+            if (index >= 0) {
+                agcSelCombo->blockSignals(true);
+                agcSelCombo->setCurrentIndex(index);
+                agcSelCombo->blockSignals(false);
+            }
+        }
+        // IC7610_V23_AGC_RECEIVER_REPLY
+        if (val.receiver < receivers.size()) {
+            receivers[val.receiver]->setIC7610AGC(
+                        val.value.value<uchar>());
+        }
+        break;
+    }
     case funcAGCTimeConstant:
         break;
     case funcNoiseBlanker:
@@ -6798,6 +8889,95 @@ void wfmain::receiveRigCaps(rigCapabilities* caps)
         ui->voxEnableChk->setEnabled(rigCaps->commands.contains(funcVox));
         ui->digiselEnableChk->setEnabled(rigCaps->commands.contains(funcDigiSel));
 
+        // Icom CI-V 0x16 0x12: 1=FAST, 2=MID, 3=SLOW.
+        QComboBox *agcSelCombo = findChild<QComboBox*>(QStringLiteral("agcSelCombo"));
+        if (agcSelCombo != Q_NULLPTR) {
+            agcSelCombo->blockSignals(true);
+            agcSelCombo->clear();
+            agcSelCombo->addItem(tr("FAST"), 1);
+            agcSelCombo->addItem(tr("MID"), 2);
+            agcSelCombo->addItem(tr("SLOW"), 3);
+            agcSelCombo->setCurrentIndex(-1);
+            agcSelCombo->setEnabled(rigCaps->commands.contains(funcAGC));
+            agcSelCombo->blockSignals(false);
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // IC7610_EXT_CAPS_BEGIN
+        const bool ext7610IsRig =
+                rigCaps->modelName.contains(QStringLiteral("7610"), Qt::CaseInsensitive);
+
+        QPushButton *ext7610Btn =
+                findChild<QPushButton*>(QStringLiteral("ext7610Btn"));
+        if (ext7610Btn != Q_NULLPTR) {
+            ext7610Btn->setVisible(false); // IC7610_V23_HIDE_LEGACY_EXT
+            ext7610Btn->setEnabled(ext7610IsRig);
+        }
+
+        QLabel *ext7610ReceiverLabel =
+                findChild<QLabel*>(QStringLiteral("ext7610ReceiverLabel"));
+        if (ext7610ReceiverLabel != Q_NULLPTR) {
+            ext7610ReceiverLabel->setText(
+                        currentReceiver ? tr("Receiver: SUB") : tr("Receiver: MAIN"));
+        }
+
+        auto ext7610Enable = [=](const char *name, funcs f) {
+            QWidget *w = findChild<QWidget*>(QString::fromLatin1(name));
+            if (w != Q_NULLPTR)
+                w->setEnabled(ext7610IsRig && rigCaps->commands.contains(f));
+        };
+
+        ext7610Enable("agcTcCombo", funcAGCTimeConstant);
+        ext7610Enable("apfModeCombo", funcAudioPeakFilter);
+        ext7610Enable("apfPositionSpin", funcAPFLevel);
+        ext7610Enable("apfTypeCombo", funcAPFType);
+        ext7610Enable("apfAfLevelSpin", funcAPFTypeLevel);
+        ext7610Enable("nrLevelSpin", funcNRLevel);
+        ext7610Enable("nbLevelSpin", funcNBLevel);
+        ext7610Enable("nbDepthSpin", funcNBDepth);
+        ext7610Enable("nbWidthSpin", funcNBWidth);
+        ext7610Enable("autoNotchChk", funcAutoNotch);
+        ext7610Enable("manualNotchChk", funcManualNotch);
+        ext7610Enable("notchPositionSpin", funcNotchFilter);
+        ext7610Enable("manualNotchWidthCombo", funcManualNotchWidth);
+        ext7610Enable("afMuteChk", funcAFMute);
+        ext7610Enable("digiSelShiftSpin", funcDigiSelShift);
+        ext7610Enable("twinPeakChk", funcTwinPeakFilter);
+        ext7610Enable("dialLockChk", funcDialLock);
+        ext7610Enable("mainSubTrackingChk", funcMainSubTracking);
+        ext7610Enable("compLevelSpin", funcCompressorLevel);
+        ext7610Enable("driveGainSpin", funcDriveGain);
+        ext7610Enable("voxGainSpin", funcVoxGain);
+        ext7610Enable("antiVoxGainSpin", funcAntiVoxGain);
+        ext7610Enable("voxDelaySpin", funcVOXDelay);
+        ext7610Enable("voxVoiceDelayCombo", funcVOXVoiceDelay);
+        ext7610Enable("breakInModeCombo", funcBreakIn);
+        ext7610Enable("breakInDelaySpin", funcBreakInDelay);
+        ext7610Enable("ssbTxBwCombo", funcSSBTXBandwidth);
+        // IC7610_EXT_CAPS_END
+
+
+
         for (const auto& receiver: receivers) {
             if (receiver->getReceiver() == 0) {
                 // Report scope redraw time to Select Radio window (only scope 0)
@@ -7023,6 +9203,23 @@ void wfmain::setupLambdaSlots()
                 QVariant::fromValue<uchar>(ui->nbEnableChk->isTristate()?checked:bool(checked)),false,currentReceiver));
     });
 
+    QComboBox *agcSelCombo = findChild<QComboBox*>(QStringLiteral("agcSelCombo"));
+    if (agcSelCombo != Q_NULLPTR) {
+        connect(agcSelCombo,
+                static_cast<void (QComboBox::*)(int)>(&QComboBox::activated),
+                this, [=](int index) {
+            if (index < 0)
+                return;
+            const uchar agc =
+                    static_cast<uchar>(agcSelCombo->itemData(index).toUInt());
+            queue->addUnique(priorityImmediate,
+                             queueItem(funcAGC,
+                                       QVariant::fromValue<uchar>(agc),
+                                       false,
+                                       currentReceiver));
+        });
+    }
+
     connect(ui->ipPlusEnableChk, CHKFUNC {
         queue->addUnique(priorityImmediate,queueItem(funcIPPlus,QVariant::fromValue<bool>(checked),false,currentReceiver));
     });
@@ -7038,6 +9235,1141 @@ void wfmain::setupLambdaSlots()
     connect(ui->digiselEnableChk, CHKFUNC {
         queue->addUnique(priorityImmediate,queueItem(funcDigiSel,QVariant::fromValue<bool>(checked),false,currentReceiver));
     });
+
+
+
+
+// IC7610_EXT_SIGNALS_BEGIN
+    QPushButton *ext7610Btn =
+            findChild<QPushButton*>(QStringLiteral("ext7610Btn"));
+    QPushButton *ext7610RefreshBtn =
+            findChild<QPushButton*>(QStringLiteral("ext7610RefreshBtn"));
+    QPushButton *ext7610CloseBtn =
+            findChild<QPushButton*>(QStringLiteral("ext7610CloseBtn"));
+    QDialog *ext7610Dialog =
+            findChild<QDialog*>(QStringLiteral("ext7610Dialog"));
+
+    auto ext7610Target = [=](funcs f) -> uchar {
+        if (rigCaps == Q_NULLPTR)
+            return 0;
+        auto it = rigCaps->commands.find(f);
+        if (it == rigCaps->commands.end())
+            return 0;
+        return it->cmd29 ? currentReceiver : 0;
+    };
+
+    auto ext7610Read = [=](funcs f) {
+        if (rigCaps == Q_NULLPTR)
+            return;
+        auto it = rigCaps->commands.find(f);
+        if (it == rigCaps->commands.end() || !it->getCmd)
+            return;
+        queue->add(priorityImmediate, f, false, ext7610Target(f));
+    };
+
+    auto ext7610ReadAll = [=]() {
+        QLabel *label =
+                findChild<QLabel*>(QStringLiteral("ext7610ReceiverLabel"));
+        if (label != Q_NULLPTR)
+            label->setText(currentReceiver ? tr("Receiver: SUB") : tr("Receiver: MAIN"));
+
+        ext7610Read(funcAGC);
+        ext7610Read(funcAGCTimeConstant);
+        ext7610Read(funcAudioPeakFilter);
+        ext7610Read(funcAPFLevel);
+        ext7610Read(funcAPFType);
+        ext7610Read(funcAPFTypeLevel);
+        ext7610Read(funcNRLevel);
+        ext7610Read(funcNBLevel);
+        ext7610Read(funcNBDepth);
+        ext7610Read(funcNBWidth);
+        ext7610Read(funcAutoNotch);
+        ext7610Read(funcManualNotch);
+        ext7610Read(funcNotchFilter);
+        ext7610Read(funcManualNotchWidth);
+        ext7610Read(funcAFMute);
+        ext7610Read(funcDigiSel);
+        ext7610Read(funcDigiSelShift);
+        ext7610Read(funcTwinPeakFilter);
+        ext7610Read(funcDialLock);
+        ext7610Read(funcMainSubTracking);
+        ext7610Read(funcCompressorLevel);
+        ext7610Read(funcDriveGain);
+        ext7610Read(funcVoxGain);
+        ext7610Read(funcAntiVoxGain);
+        ext7610Read(funcVOXDelay);
+        ext7610Read(funcVOXVoiceDelay);
+        ext7610Read(funcBreakIn);
+        ext7610Read(funcBreakInDelay);
+        ext7610Read(funcSSBTXBandwidth);
+        // IC7610_V23_SET_READS
+        ext7610Read(funcQuickDualWatch);
+        ext7610Read(funcQuickSplit);
+        ext7610Read(funcCIVTransceive);
+        ext7610Read(funcCIVOutput);
+        ext7610Read(funcDashRatio);
+        ext7610Read(funcACCAModLevel);
+        ext7610Read(funcUSBModLevel);
+        ext7610Read(funcLANModLevel);
+        ext7610Read(funcSSBRXBass);
+        ext7610Read(funcSSBRXTreble);
+        ext7610Read(funcAMRXBass);
+        ext7610Read(funcAMRXTreble);
+        ext7610Read(funcFMRXBass);
+        ext7610Read(funcFMRXTreble);
+        ext7610Read(funcSSBTXBass);
+        ext7610Read(funcSSBTXTreble);
+        ext7610Read(funcAMTXBass);
+        ext7610Read(funcAMTXTreble);
+        ext7610Read(funcFMTXBass);
+        ext7610Read(funcFMTXTreble);
+        ext7610Read(funcBeepLevel);
+        ext7610Read(funcBeepLevelLimit);
+        ext7610Read(funcBeepConfirmation);
+        ext7610Read(funcBandEdgeBeep);
+        ext7610Read(funcRFSQLControl);
+        ext7610Read(funcTXDelayHF);
+        ext7610Read(funcTXDelay50m);
+        // IC7610_V27_SET_READS
+        ext7610Read(funcACCOutputSelect);
+        ext7610Read(funcACCAFOutputLevel);
+        ext7610Read(funcACCIFOutputLevel);
+        ext7610Read(funcUSBOutputSelect);
+        ext7610Read(funcUSBAFOutputLevel);
+        ext7610Read(funcUSBIFOutputLevel);
+        ext7610Read(funcLANOutputSelect);
+        ext7610Read(funcREFInput);
+        // IC7610_V37_SET_READS
+        ext7610Read(func7610CIVTimeout);
+        ext7610Read(func7610RTTYMarkFreq);
+        ext7610Read(func7610RTTYShiftWidth);
+        ext7610Read(func7610RTTYKeyPolarity);
+        ext7610Read(func7610SSBCWSyncTune);
+        ext7610Read(func7610CWNormalSide);
+        ext7610Read(func7610USBKeyCW);
+        ext7610Read(func7610USBKeyRTTY);
+        ext7610Read(func7610CIVRemoteAddress);
+        ext7610Read(func7610CIVUSBPort);
+        ext7610Read(func7610CIVUSBEcho);
+        ext7610Read(func7610SideToneLevel);
+        ext7610Read(func7610SideToneLimit);
+        ext7610Read(func7610KeyerRepeat);
+        ext7610Read(func7610CWRiseTime);
+        ext7610Read(func7610PaddlePolarity);
+        ext7610Read(func7610KeyType);
+        ext7610Read(func7610MicUpDownKeyer);
+        // IC7610_V39_RTTY_SET_READS
+        ext7610Read(func7610ExternalKeypadRTTY);
+        ext7610Read(func7610DecodeBaud);
+        ext7610Read(func7610RTTYFFTAverage);
+        ext7610Read(func7610RTTYDecodeUSOS);
+        ext7610Read(func7610RTTYNewLine);
+        ext7610Read(func7610RTTYDiddle);
+        ext7610Read(func7610RTTYTXUSOS);
+        ext7610Read(func7610RTTYAutoCRLF);
+        ext7610Read(func7610RTTYTimestamp);
+        ext7610Read(func7610RTTYTimestampTime);
+        ext7610Read(func7610RTTYTimestampFreq);
+        ext7610Read(func7610RTTYDecodeLog);
+        ext7610Read(func7610RTTYLogFileType);
+    };
+
+    // IC7610_V46_CIV_RUNTIME_REFRESH
+    // IC7610_V46_CIV_RUNTIME_SCOPE_FIX
+    //
+    // setupLambdaSlots() is a different C++ scope from setupMainUI().
+    // Resolve the Extended Controls labels from their object names instead
+    // of referencing setupMainUI() local pointer variables.
+    auto v46ValidCivBaud =
+            [](quint32 baud) -> bool {
+        switch (baud) {
+        case 4800:
+        case 9600:
+        case 19200:
+        case 38400:
+        case 57600:
+        case 115200:
+            return true;
+        default:
+            return false;
+        }
+    };
+
+    auto v46RefreshCivInfo =
+            [=]() {
+        QLabel *v46CivTransport =
+                findChild<QLabel*>(
+                    QStringLiteral("setCivTransportValue"));
+
+        QLabel *v46CivPort =
+                findChild<QLabel*>(
+                    QStringLiteral("setCivPortValue"));
+
+        QLabel *v46CivBaud =
+                findChild<QLabel*>(
+                    QStringLiteral("setCivBaudValue"));
+
+        QLabel *v46CivLocalAddress =
+                findChild<QLabel*>(
+                    QStringLiteral("setCivLocalAddressValue"));
+
+        QLabel *v46CivRadioBaud =
+                findChild<QLabel*>(
+                    QStringLiteral("setCivRadioBaudInfo"));
+
+        QLabel *v46CivRadioAddress =
+                findChild<QLabel*>(
+                    QStringLiteral("setCivRadioAddressInfo"));
+
+        QLabel *v46CivUsbBaud =
+                findChild<QLabel*>(
+                    QStringLiteral("setCivUsbBaudInfo"));
+
+        if (v46CivTransport == Q_NULLPTR ||
+            v46CivPort == Q_NULLPTR ||
+            v46CivBaud == Q_NULLPTR ||
+            v46CivLocalAddress == Q_NULLPTR ||
+            v46CivRadioBaud == Q_NULLPTR ||
+            v46CivRadioAddress == Q_NULLPTR ||
+            v46CivUsbBaud == Q_NULLPTR) {
+            qWarning(logGui())
+                    << "IC-7610 CI-V runtime information widgets "
+                       "could not all be resolved.";
+            return;
+        }
+
+        v46CivTransport->setText(
+            prefs.enableLAN
+                ? tr("LAN / Network")
+                : tr("Serial / USB"));
+
+        if (prefs.enableLAN) {
+            v46CivPort->setText(
+                tr("Native LAN"));
+        }
+        else {
+            QString v46Port = serialPortRig;
+
+            if (v46Port.isEmpty() ||
+                v46Port.compare(
+                    QStringLiteral("auto"),
+                    Qt::CaseInsensitive) == 0) {
+                v46Port = prefs.serialPortRadio;
+            }
+
+            if (v46Port.isEmpty())
+                v46Port = tr("Unknown");
+
+            v46CivPort->setText(v46Port);
+        }
+
+        quint32 v46EffectiveBaud = 0;
+
+        if (!prefs.enableLAN &&
+            rigCaps != Q_NULLPTR &&
+            v46ValidCivBaud(rigCaps->baudRate)) {
+            v46EffectiveBaud = rigCaps->baudRate;
+        }
+
+        if (!prefs.enableLAN &&
+            v46EffectiveBaud == 0 &&
+            v46ValidCivBaud(prefs.serialPortBaud)) {
+            v46EffectiveBaud = prefs.serialPortBaud;
+        }
+
+        if (!prefs.enableLAN &&
+            v46EffectiveBaud == 0 &&
+            v46ValidCivBaud(serverConfig.baudRate)) {
+            v46EffectiveBaud = serverConfig.baudRate;
+        }
+
+        if (prefs.enableLAN) {
+            v46CivBaud->setText(
+                tr("N/A (LAN transport)"));
+
+            v46CivRadioBaud->setText(
+                tr("Not readable over LAN"));
+
+            v46CivUsbBaud->setText(
+                tr("Not readable over LAN"));
+        }
+        else if (v46EffectiveBaud != 0) {
+            v46CivBaud->setText(
+                tr("%1 baud")
+                    .arg(v46EffectiveBaud));
+
+            v46CivRadioBaud->setText(
+                tr("%1 baud - live/effective serial CI-V link; "
+                   "front-panel CI-V Baud may be AUTO or fixed")
+                    .arg(v46EffectiveBaud));
+
+            v46CivUsbBaud->setText(
+                tr("%1 baud - live/effective serial CI-V link; "
+                   "literal USB Baud versus [REMOTE]-linked selection "
+                   "is not separately observable")
+                    .arg(v46EffectiveBaud));
+        }
+        else {
+            v46CivBaud->setText(
+                tr("Unknown"));
+
+            v46CivRadioBaud->setText(
+                tr("Effective serial CI-V baud is not available"));
+
+            v46CivUsbBaud->setText(
+                tr("Effective serial CI-V baud is not available"));
+        }
+
+        if (prefs.radioCIVAddr != 0) {
+            const QString v46Address =
+                    QStringLiteral("0x%1")
+                        .arg(
+                            prefs.radioCIVAddr & 0xff,
+                            2,
+                            16,
+                            QChar('0'))
+                        .toUpper();
+
+            v46CivLocalAddress->setText(v46Address);
+
+            v46CivRadioAddress->setText(
+                tr("wfview target %1")
+                    .arg(v46Address));
+        }
+        else {
+            v46CivLocalAddress->setText(
+                tr("Auto"));
+
+            v46CivRadioAddress->setText(
+                tr("Auto (wfview detects radio)"));
+        }
+    };
+
+    if (ext7610Btn != Q_NULLPTR && ext7610Dialog != Q_NULLPTR) {
+        connect(ext7610Btn, &QPushButton::clicked, this, [=]() {
+            v46RefreshCivInfo();
+            ext7610ReadAll();
+            ext7610Dialog->show();
+            ext7610Dialog->raise();
+            ext7610Dialog->activateWindow();
+        });
+    }
+
+    if (ext7610RefreshBtn != Q_NULLPTR) {
+        connect(ext7610RefreshBtn, &QPushButton::clicked, this, [=]() {
+            v46RefreshCivInfo();
+            ext7610ReadAll();
+        });
+    }
+    if (ext7610CloseBtn != Q_NULLPTR && ext7610Dialog != Q_NULLPTR) {
+        connect(ext7610CloseBtn, &QPushButton::clicked,
+                ext7610Dialog, &QDialog::hide);
+    }
+
+    auto ext7610ConnectSpin16 = [=](const char *name, funcs f) {
+        QSpinBox *w = findChild<QSpinBox*>(QString::fromLatin1(name));
+        if (w == Q_NULLPTR)
+            return;
+        connect(w, &QSpinBox::editingFinished, this, [=]() {
+            if (rigCaps == Q_NULLPTR)
+                return;
+            auto it = rigCaps->commands.find(f);
+            if (it == rigCaps->commands.end() || !it->setCmd)
+                return;
+            queue->addUnique(
+                        priorityImmediate,
+                        queueItem(f,
+                                  QVariant::fromValue<ushort>(
+                                      static_cast<ushort>(w->value())),
+                                  false,
+                                  ext7610Target(f)));
+        });
+    };    auto ext7610ConnectMappedSpin16 = [=](const char *name,
+                                          funcs f,
+                                          int displayMin,
+                                          int displayMax,
+                                          int rawMin,
+                                          int rawMax) {
+        QSpinBox *w = findChild<QSpinBox*>(QString::fromLatin1(name));
+        if (w == Q_NULLPTR)
+            return;
+
+        connect(w, &QSpinBox::editingFinished, this, [=]() {
+            if (rigCaps == Q_NULLPTR || displayMax == displayMin)
+                return;
+
+            auto it = rigCaps->commands.find(f);
+            if (it == rigCaps->commands.end() || !it->setCmd)
+                return;
+
+            int display = w->value();
+            if (display < displayMin)
+                display = displayMin;
+            if (display > displayMax)
+                display = displayMax;
+
+            int raw =
+                    rawMin +
+                    static_cast<int>(
+                        ((static_cast<qint64>(display - displayMin) *
+                          static_cast<qint64>(rawMax - rawMin)) +
+                         ((displayMax - displayMin) / 2)) /
+                        (displayMax - displayMin));
+
+            if (raw < rawMin)
+                raw = rawMin;
+            if (raw > rawMax)
+                raw = rawMax;
+
+            queue->addUnique(
+                        priorityImmediate,
+                        queueItem(f,
+                                  QVariant::fromValue<ushort>(
+                                      static_cast<ushort>(raw)),
+                                  false,
+                                  ext7610Target(f)));
+        });
+    };
+ auto ext7610ConnectSpin8 = [=](const char *name, funcs f) {
+        QSpinBox *w = findChild<QSpinBox*>(QString::fromLatin1(name));
+        if (w == Q_NULLPTR)
+            return;
+        connect(w, &QSpinBox::editingFinished, this, [=]() {
+            if (rigCaps == Q_NULLPTR)
+                return;
+            auto it = rigCaps->commands.find(f);
+            if (it == rigCaps->commands.end() || !it->setCmd)
+                return;
+            queue->addUnique(
+                        priorityImmediate,
+                        queueItem(f,
+                                  QVariant::fromValue<uchar>(
+                                      static_cast<uchar>(w->value())),
+                                  false,
+                                  ext7610Target(f)));
+        });
+    };
+
+    auto ext7610ConnectCombo8 = [=](const char *name, funcs f) {
+        QComboBox *w = findChild<QComboBox*>(QString::fromLatin1(name));
+        if (w == Q_NULLPTR)
+            return;
+        connect(w,
+                static_cast<void (QComboBox::*)(int)>(&QComboBox::activated),
+                this, [=](int index) {
+            if (index < 0 || rigCaps == Q_NULLPTR)
+                return;
+            auto it = rigCaps->commands.find(f);
+            if (it == rigCaps->commands.end() || !it->setCmd)
+                return;
+            queue->addUnique(
+                        priorityImmediate,
+                        queueItem(f,
+                                  QVariant::fromValue<uchar>(
+                                      static_cast<uchar>(
+                                          w->itemData(index).toUInt())),
+                                  false,
+                                  ext7610Target(f)));
+        });
+    };
+
+    auto ext7610ConnectCheck = [=](const char *name, funcs f) {
+        QCheckBox *w = findChild<QCheckBox*>(QString::fromLatin1(name));
+        if (w == Q_NULLPTR)
+            return;
+        connect(w, &QCheckBox::toggled, this, [=](bool checked) {
+            if (rigCaps == Q_NULLPTR)
+                return;
+            auto it = rigCaps->commands.find(f);
+            if (it == rigCaps->commands.end() || !it->setCmd)
+                return;
+            queue->addUnique(
+                        priorityImmediate,
+                        queueItem(f,
+                                  QVariant::fromValue<bool>(checked),
+                                  false,
+                                  ext7610Target(f)));
+        });
+    };
+
+    // IC7610_V43_FINAL_MAIN_NOTCH_UI
+    QCheckBox *v43MainAutoNotch =
+            findChild<QCheckBox*>(
+                QStringLiteral("mainAutoNotchChk"));
+
+    if (v43MainAutoNotch == Q_NULLPTR) {
+        v43MainAutoNotch =
+                new QCheckBox(
+                    tr("AN"),
+                    ui->OtherControlsGrp);
+
+        v43MainAutoNotch->setObjectName(
+                QStringLiteral("mainAutoNotchChk"));
+        v43MainAutoNotch->setEnabled(false);
+        v43MainAutoNotch->setMaximumWidth(46);
+        v43MainAutoNotch->setToolTip(
+                tr("Auto Notch"));
+        ui->horizontalLayout_6->addWidget(
+                v43MainAutoNotch);
+    }
+
+    QCheckBox *v43MainManualNotch =
+            findChild<QCheckBox*>(
+                QStringLiteral("mainManualNotchChk"));
+
+    if (v43MainManualNotch == Q_NULLPTR) {
+        v43MainManualNotch =
+                new QCheckBox(
+                    tr("MN"),
+                    ui->OtherControlsGrp);
+
+        v43MainManualNotch->setObjectName(
+                QStringLiteral("mainManualNotchChk"));
+        v43MainManualNotch->setEnabled(false);
+        v43MainManualNotch->setMaximumWidth(46);
+        v43MainManualNotch->setToolTip(
+                tr("Manual Notch"));
+        ui->horizontalLayout_6->addWidget(
+                v43MainManualNotch);
+    }
+
+    QSpinBox *v43MainNotchPosition =
+            findChild<QSpinBox*>(
+                QStringLiteral("mainNotchPositionSpin"));
+
+    if (v43MainNotchPosition == Q_NULLPTR) {
+        v43MainNotchPosition =
+                new QSpinBox(
+                    ui->OtherControlsGrp);
+
+        v43MainNotchPosition->setObjectName(
+                QStringLiteral("mainNotchPositionSpin"));
+        v43MainNotchPosition->setRange(-100, 100);
+        v43MainNotchPosition->setPrefix(tr("N "));
+        v43MainNotchPosition->setSuffix(tr("%"));
+        v43MainNotchPosition->setAlignment(
+                Qt::AlignRight);
+        v43MainNotchPosition->setEnabled(false);
+        v43MainNotchPosition->setMinimumWidth(76);
+        v43MainNotchPosition->setMaximumWidth(92);
+        // IC7610_V44_NOTCH_POSITION_WIDTH
+        // Guarantee enough room for the full "N -100%" / "N +100%" text
+        // plus the spin arrows. AN and MN sizing is intentionally untouched.
+        v43MainNotchPosition->setFixedWidth(112);
+        v43MainNotchPosition->setToolTip(
+                tr("Manual Notch Position"));
+        ui->horizontalLayout_6->addWidget(
+                v43MainNotchPosition);
+    }
+
+    // IC7610_V45_NOTCH_WIDTH_LOCK
+    // IC7610_V46_NOTCH_SIZEHINT
+    // Use the actual font/style size hint rather than a hard logical-pixel
+    // assumption.  This remains readable on the high-DPI Windows test setup.
+    if (v43MainNotchPosition != Q_NULLPTR) {
+        v43MainNotchPosition->setPrefix(tr("N "));
+        v43MainNotchPosition->setSuffix(tr("%"));
+        v43MainNotchPosition->setRange(-100, 100);
+        // IC7610_V47_NOTCH_VCLIP
+        // Override only this widget's padding so the text has full height.
+        v43MainNotchPosition->setStyleSheet(
+                QStringLiteral(
+                    "QSpinBox#mainNotchPositionSpin {"
+                    " padding-top: 0px; padding-bottom: 0px;"
+                    " padding-left: 2px; padding-right: 2px;"
+                    " min-width: 0px; }"));
+        v43MainNotchPosition->setAlignment(
+                Qt::AlignRight | Qt::AlignVCenter);
+        v43MainNotchPosition->setSizePolicy(
+                    QSizePolicy::Fixed, QSizePolicy::Fixed);
+
+        const int v46NotchWidth =
+                qMax(112, v43MainNotchPosition->sizeHint().width() + 28);
+
+        v43MainNotchPosition->setMinimumWidth(v46NotchWidth);
+        v43MainNotchPosition->setMaximumWidth(v46NotchWidth);
+        v43MainNotchPosition->setFixedWidth(v46NotchWidth);
+
+        const int v47NotchHeight =
+                qMax(v43MainNotchPosition->sizeHint().height(),
+                     v43MainNotchPosition->fontMetrics().height() + 8);
+        v43MainNotchPosition->setFixedHeight(v47NotchHeight);
+    }
+    // Reuse the exact same sender helpers as EXT RX/DSP.
+    ext7610ConnectCheck(
+            "mainAutoNotchChk",
+            funcAutoNotch);
+
+    ext7610ConnectCheck(
+            "mainManualNotchChk",
+            funcManualNotch);
+
+    // IC7610_V45_NOTCH_CENTER_TX
+    auto v45ConnectNotchPosition =
+            [=](const char *name) {
+        QSpinBox *w =
+                findChild<QSpinBox*>(
+                    QString::fromLatin1(name));
+
+        if (w == Q_NULLPTR)
+            return;
+
+        w->setRange(-100, 100);
+
+        connect(
+            w,
+            &QSpinBox::editingFinished,
+            this,
+            [=]() {
+                if (rigCaps == Q_NULLPTR)
+                    return;
+
+                auto it =
+                        rigCaps->commands.find(
+                            funcNotchFilter);
+
+                if (it == rigCaps->commands.end() ||
+                    !it->setCmd)
+                    return;
+
+                const int percent =
+                        qBound(-100, w->value(), 100);
+
+                // IC7610_V47_NOTCH_TX_GUARD
+                // editingFinished also fires on focus-out with no edit.
+                // Never push a value back that simply mirrors the radio.
+                const QVariant v47LastRx =
+                        w->property("ic7610LastRxPercent");
+                if (v47LastRx.isValid() &&
+                    v47LastRx.toInt() == percent)
+                    return;
+
+                int raw = 128;
+
+                if (percent <= 0) {
+                    raw =
+                            128 +
+                            qRound(
+                                static_cast<double>(percent) *
+                                128.0 / 100.0);
+                }
+                else {
+                    raw =
+                            128 +
+                            qRound(
+                                static_cast<double>(percent) *
+                                127.0 / 100.0);
+                }
+
+                raw = qBound(0, raw, 255);
+
+                queue->addUnique(
+                    priorityImmediate,
+                    queueItem(
+                        funcNotchFilter,
+                        QVariant::fromValue<ushort>(
+                            static_cast<ushort>(raw)),
+                        false,
+                        ext7610Target(
+                            funcNotchFilter)));
+            });
+    };
+    v45ConnectNotchPosition("mainNotchPositionSpin");
+
+    // GET readback after SET from EITHER copy of each control.
+    auto v43ScheduleNotchRead =
+            [=](funcs f) {
+        QTimer::singleShot(
+            120,
+            this,
+            [=]() {
+                ext7610Read(f);
+            });
+    };
+
+    QCheckBox *v43ExtAutoNotch =
+            findChild<QCheckBox*>(
+                QStringLiteral("autoNotchChk"));
+
+    QCheckBox *v43ExtManualNotch =
+            findChild<QCheckBox*>(
+                QStringLiteral("manualNotchChk"));
+
+    QSpinBox *v43ExtNotchPosition =
+            findChild<QSpinBox*>(
+                QStringLiteral("notchPositionSpin"));
+
+    if (v43MainAutoNotch != Q_NULLPTR)
+        connect(
+            v43MainAutoNotch,
+            &QCheckBox::toggled,
+            this,
+            [=](bool) {
+                v43ScheduleNotchRead(
+                    funcAutoNotch);
+            });
+
+    if (v43ExtAutoNotch != Q_NULLPTR)
+        connect(
+            v43ExtAutoNotch,
+            &QCheckBox::toggled,
+            this,
+            [=](bool) {
+                v43ScheduleNotchRead(
+                    funcAutoNotch);
+            });
+
+    if (v43MainManualNotch != Q_NULLPTR)
+        connect(
+            v43MainManualNotch,
+            &QCheckBox::toggled,
+            this,
+            [=](bool) {
+                v43ScheduleNotchRead(
+                    funcManualNotch);
+            });
+
+    if (v43ExtManualNotch != Q_NULLPTR)
+        connect(
+            v43ExtManualNotch,
+            &QCheckBox::toggled,
+            this,
+            [=](bool) {
+                v43ScheduleNotchRead(
+                    funcManualNotch);
+            });
+
+    if (v43MainNotchPosition != Q_NULLPTR)
+        connect(
+            v43MainNotchPosition,
+            &QSpinBox::editingFinished,
+            this,
+            [=]() {
+                v43ScheduleNotchRead(
+                    funcNotchFilter);
+            });
+
+    if (v43ExtNotchPosition != Q_NULLPTR)
+        connect(
+            v43ExtNotchPosition,
+            &QSpinBox::editingFinished,
+            this,
+            [=]() {
+                v43ScheduleNotchRead(
+                    funcNotchFilter);
+            });
+
+    // Main controls remain disabled until these replies return.
+    ext7610Read(funcAutoNotch);
+    ext7610Read(funcManualNotch);
+    ext7610Read(funcNotchFilter);
+    // Two-byte BCD 0..255 level commands.
+    ext7610ConnectMappedSpin16("apfPositionSpin", funcAPFLevel, -550, 550, 0, 255);
+    ext7610ConnectMappedSpin16("nrLevelSpin", funcNRLevel, 0, 15, 8, 248);
+    ext7610ConnectMappedSpin16("nbLevelSpin", funcNBLevel, 0, 100, 0, 255);
+    ext7610ConnectMappedSpin16("nbWidthSpin", funcNBWidth, 1, 100, 0, 255);
+    v45ConnectNotchPosition("notchPositionSpin"); // IC7610_V23_NOTCH_TX
+    ext7610ConnectMappedSpin16("digiSelShiftSpin", funcDigiSelShift, -100, 100, 0, 255); // IC7610_V23_DIGISEL_TX
+    ext7610ConnectMappedSpin16("compLevelSpin", funcCompressorLevel, 0, 10, 0, 255);
+    ext7610ConnectMappedSpin16("driveGainSpin", funcDriveGain, 0, 100, 0, 255);
+    ext7610ConnectMappedSpin16("voxGainSpin", funcVoxGain, 0, 100, 0, 255);
+    ext7610ConnectMappedSpin16("antiVoxGainSpin", funcAntiVoxGain, 0, 100, 0, 255);
+    ext7610ConnectMappedSpin16("breakInDelaySpin", funcBreakInDelay, 20, 130, 0, 255);
+
+    // One-byte BCD controls.
+    ext7610ConnectSpin8("apfAfLevelSpin", funcAPFTypeLevel);
+    {
+        QSpinBox *nbDepthSpin =
+                findChild<QSpinBox*>(QStringLiteral("nbDepthSpin"));
+        if (nbDepthSpin != Q_NULLPTR) {
+            connect(nbDepthSpin, &QSpinBox::editingFinished, this, [=]() {
+                if (rigCaps == Q_NULLPTR)
+                    return;
+                auto it = rigCaps->commands.find(funcNBDepth);
+                if (it == rigCaps->commands.end() || !it->setCmd)
+                    return;
+                const uchar raw =
+                        static_cast<uchar>(qBound(1, nbDepthSpin->value(), 10) - 1);
+                queue->addUnique(
+                            priorityImmediate,
+                            queueItem(funcNBDepth,
+                                      QVariant::fromValue<uchar>(raw),
+                                      false,
+                                      ext7610Target(funcNBDepth)));
+            });
+        }
+    }
+    ext7610ConnectSpin8("voxDelaySpin", funcVOXDelay);
+
+    ext7610ConnectCombo8("agcTcCombo", funcAGCTimeConstant);
+    ext7610ConnectCombo8("apfModeCombo", funcAudioPeakFilter);
+    ext7610ConnectCombo8("apfTypeCombo", funcAPFType);
+    ext7610ConnectCombo8("manualNotchWidthCombo", funcManualNotchWidth);
+    ext7610ConnectCombo8("voxVoiceDelayCombo", funcVOXVoiceDelay);
+    ext7610ConnectCombo8("breakInModeCombo", funcBreakIn);
+    ext7610ConnectCombo8("ssbTxBwCombo", funcSSBTXBandwidth);
+
+    ext7610ConnectCheck("autoNotchChk", funcAutoNotch);
+    ext7610ConnectCheck("manualNotchChk", funcManualNotch);
+    ext7610ConnectCheck("afMuteChk", funcAFMute);
+    ext7610ConnectCheck("twinPeakChk", funcTwinPeakFilter);
+    ext7610ConnectCheck("dialLockChk", funcDialLock);
+    ext7610ConnectCheck("mainSubTrackingChk", funcMainSubTracking);
+        // IC7610_V23_SET_SIGNAL_HELPERS
+    auto set7610ReadBack = [=](funcs f) {
+        ext7610Read(f);
+    };
+
+    auto set7610ConnectCheckBool = [=](const char *name, funcs f) {
+        QCheckBox *w = findChild<QCheckBox*>(QString::fromLatin1(name));
+        if (w == Q_NULLPTR)
+            return;
+        connect(w, &QCheckBox::toggled, this, [=](bool checked) {
+            if (!w->isEnabled() || rigCaps == Q_NULLPTR)
+                return;
+            queue->add(priorityImmediate,
+                       queueItem(f,
+                                 QVariant::fromValue<bool>(checked),
+                                 false, 0));
+            set7610ReadBack(f);
+        });
+    };
+
+    auto set7610ConnectCheckU8 = [=](const char *name, funcs f) {
+        QCheckBox *w = findChild<QCheckBox*>(QString::fromLatin1(name));
+        if (w == Q_NULLPTR)
+            return;
+        connect(w, &QCheckBox::toggled, this, [=](bool checked) {
+            if (!w->isEnabled() || rigCaps == Q_NULLPTR)
+                return;
+            queue->add(priorityImmediate,
+                       queueItem(f,
+                                 QVariant::fromValue<uchar>(
+                                     static_cast<uchar>(checked ? 1 : 0)),
+                                 false, 0));
+            set7610ReadBack(f);
+        });
+    };
+
+    auto set7610ConnectSpinU8 = [=](const char *name, funcs f, int add) {
+        QSpinBox *w = findChild<QSpinBox*>(QString::fromLatin1(name));
+        if (w == Q_NULLPTR)
+            return;
+        connect(w, &QSpinBox::editingFinished, this, [=]() {
+            if (!w->isEnabled() || rigCaps == Q_NULLPTR)
+                return;
+            const int value = w->value() + add;
+            queue->add(priorityImmediate,
+                       queueItem(f,
+                                 QVariant::fromValue<uchar>(
+                                     static_cast<uchar>(value)),
+                                 false, 0));
+            set7610ReadBack(f);
+        });
+    };
+
+    auto set7610ConnectPercent16 = [=](const char *name, funcs f) {
+        QSpinBox *w = findChild<QSpinBox*>(QString::fromLatin1(name));
+        if (w == Q_NULLPTR)
+            return;
+        connect(w, &QSpinBox::editingFinished, this, [=]() {
+            if (!w->isEnabled() || rigCaps == Q_NULLPTR)
+                return;
+            const ushort raw =
+                    static_cast<ushort>(
+                        qRound((w->value() * 255.0) / 100.0));
+            queue->add(priorityImmediate,
+                       queueItem(f,
+                                 QVariant::fromValue<ushort>(raw),
+                                 false, 0));
+            set7610ReadBack(f);
+        });
+    };
+
+    auto set7610ConnectComboU8 = [=](const char *name, funcs f) {
+        QComboBox *w = findChild<QComboBox*>(QString::fromLatin1(name));
+        if (w == Q_NULLPTR)
+            return;
+        connect(w,
+                static_cast<void (QComboBox::*)(int)>(&QComboBox::activated),
+                this, [=](int index) {
+            if (!w->isEnabled() || index < 0 || rigCaps == Q_NULLPTR)
+                return;
+            queue->add(priorityImmediate,
+                       queueItem(f,
+                                 QVariant::fromValue<uchar>(
+                                     static_cast<uchar>(
+                                         w->itemData(index).toUInt())),
+                                 false, 0));
+            set7610ReadBack(f);
+        });
+    };
+
+    auto set7610ConnectComboU16 = [=](const char *name, funcs f) {
+        QComboBox *w = findChild<QComboBox*>(QString::fromLatin1(name));
+        if (w == Q_NULLPTR)
+            return;
+        connect(w,
+                static_cast<void (QComboBox::*)(int)>(&QComboBox::activated),
+                this, [=](int index) {
+            if (!w->isEnabled() || index < 0 || rigCaps == Q_NULLPTR)
+                return;
+            queue->add(priorityImmediate,
+                       queueItem(f,
+                                 QVariant::fromValue<ushort>(
+                                     static_cast<ushort>(
+                                         w->itemData(index).toUInt())),
+                                 false, 0));
+            set7610ReadBack(f);
+        });
+    };
+
+    set7610ConnectCheckBool("setQuickDualChk", funcQuickDualWatch);
+    set7610ConnectCheckU8("setQuickSplitChk", funcQuickSplit);
+    set7610ConnectCheckBool("setCivTransceiveChk", funcCIVTransceive);
+    set7610ConnectCheckBool("setCivOutputChk", funcCIVOutput);
+    set7610ConnectSpinU8("setDashRatioSpin", funcDashRatio, 0);
+
+    set7610ConnectPercent16("setAccModSpin", funcACCAModLevel);
+    set7610ConnectPercent16("setUsbModSpin", funcUSBModLevel);
+    set7610ConnectPercent16("setLanModSpin", funcLANModLevel);
+
+    set7610ConnectSpinU8("setSsbRxBass", funcSSBRXBass, 5);
+    set7610ConnectSpinU8("setSsbRxTreble", funcSSBRXTreble, 5);
+    set7610ConnectSpinU8("setAmRxBass", funcAMRXBass, 5);
+    set7610ConnectSpinU8("setAmRxTreble", funcAMRXTreble, 5);
+    set7610ConnectSpinU8("setFmRxBass", funcFMRXBass, 5);
+    set7610ConnectSpinU8("setFmRxTreble", funcFMRXTreble, 5);
+    set7610ConnectSpinU8("setSsbTxBass", funcSSBTXBass, 5);
+    set7610ConnectSpinU8("setSsbTxTreble", funcSSBTXTreble, 5);
+    set7610ConnectSpinU8("setAmTxBass", funcAMTXBass, 5);
+    set7610ConnectSpinU8("setAmTxTreble", funcAMTXTreble, 5);
+    set7610ConnectSpinU8("setFmTxBass", funcFMTXBass, 5);
+    set7610ConnectSpinU8("setFmTxTreble", funcFMTXTreble, 5);
+
+    set7610ConnectPercent16("setBeepLevelSpin", funcBeepLevel);
+    set7610ConnectCheckBool("setBeepLimitChk", funcBeepLevelLimit);
+    set7610ConnectCheckBool("setBeepConfirmChk", funcBeepConfirmation);
+    set7610ConnectComboU8("setBandEdgeBeepCombo", funcBandEdgeBeep);
+    set7610ConnectComboU16("setRfSqlCombo", funcRFSQLControl);
+    set7610ConnectComboU16("setTxDelayHfCombo", funcTXDelayHF);
+    set7610ConnectComboU16("setTxDelay50Combo", funcTXDelay50m);
+    // IC7610_V27_SET_SIGNALS
+    set7610ConnectComboU8("setAccOutputSelect", funcACCOutputSelect);
+    set7610ConnectPercent16("setAccAfOutputSpin", funcACCAFOutputLevel);
+    set7610ConnectPercent16("setAccIfOutputSpin", funcACCIFOutputLevel);
+    set7610ConnectComboU8("setUsbOutputSelect", funcUSBOutputSelect);
+    set7610ConnectPercent16("setUsbAfOutputSpin", funcUSBAFOutputLevel);
+    set7610ConnectPercent16("setUsbIfOutputSpin", funcUSBIFOutputLevel);
+    set7610ConnectComboU8("setLanOutputSelect", funcLANOutputSelect);
+    set7610ConnectComboU8("setRefInputCombo", funcREFInput);
+    // IC7610_V37_SET_SIGNALS
+    // IC7610_V43_FINAL_RTTY_REHOME
+    // Find the target group by title. Do not rely on construction-scope
+    // local variables, which is what broke the discarded early v43.
+    QGroupBox *v43RttyConfigGroup = Q_NULLPTR;
+
+    const QList<QGroupBox*> v43Groups =
+            findChildren<QGroupBox*>();
+
+    for (QGroupBox *group : v43Groups) {
+        if (group != Q_NULLPTR &&
+            group->title() == tr("RTTY Configuration")) {
+            v43RttyConfigGroup = group;
+            break;
+        }
+    }
+
+    QFormLayout *v43RttyConfigForm =
+            v43RttyConfigGroup
+                ? qobject_cast<QFormLayout*>(
+                    v43RttyConfigGroup->layout())
+                : Q_NULLPTR;
+
+    auto v43DetachFormField =
+            [=](QWidget *field) {
+        if (field == Q_NULLPTR)
+            return;
+
+        const QList<QFormLayout*> forms =
+                findChildren<QFormLayout*>();
+
+        for (QFormLayout *form : forms) {
+            if (form == Q_NULLPTR)
+                continue;
+
+            int row = -1;
+            QFormLayout::ItemRole role =
+                    QFormLayout::FieldRole;
+
+            form->getWidgetPosition(
+                    field,
+                    &row,
+                    &role);
+
+            if (row < 0)
+                continue;
+
+            QFormLayout::TakeRowResult taken =
+                    form->takeRow(row);
+
+            QWidget *oldLabel =
+                    taken.labelItem
+                        ? taken.labelItem->widget()
+                        : Q_NULLPTR;
+
+            if (oldLabel != Q_NULLPTR)
+                oldLabel->deleteLater();
+
+            delete taken.labelItem;
+            delete taken.fieldItem;
+            return;
+        }
+    };
+
+    if (v43RttyConfigForm != Q_NULLPTR) {
+        QComboBox *v43RttyMark =
+                findChild<QComboBox*>(
+                    QStringLiteral("setRttyMarkCombo"));
+        QComboBox *v43RttyShift =
+                findChild<QComboBox*>(
+                    QStringLiteral("setRttyShiftCombo"));
+        QComboBox *v43RttyPolarity =
+                findChild<QComboBox*>(
+                    QStringLiteral("setRttyPolarityCombo"));
+        QComboBox *v43RttyUsbKey =
+                findChild<QComboBox*>(
+                    QStringLiteral("setUsbKeyRttyCombo"));
+        QCheckBox *v43RttyKeypad =
+                findChild<QCheckBox*>(
+                    QStringLiteral("setExternalKeypadRttyChk"));
+        QComboBox *v43RttyDecodeBaud =
+                findChild<QComboBox*>(
+                    QStringLiteral("setDecodeBaudCombo"));
+
+        v43DetachFormField(v43RttyMark);
+        v43DetachFormField(v43RttyShift);
+        v43DetachFormField(v43RttyPolarity);
+        v43DetachFormField(v43RttyUsbKey);
+        v43DetachFormField(v43RttyKeypad);
+        v43DetachFormField(v43RttyDecodeBaud);
+
+        if (v43RttyMark != Q_NULLPTR)
+            v43RttyConfigForm->addRow(
+                tr("RTTY Mark Frequency"),
+                v43RttyMark);
+
+        if (v43RttyShift != Q_NULLPTR)
+            v43RttyConfigForm->addRow(
+                tr("RTTY Shift Width"),
+                v43RttyShift);
+
+        if (v43RttyPolarity != Q_NULLPTR)
+            v43RttyConfigForm->addRow(
+                tr("RTTY Keying Polarity"),
+                v43RttyPolarity);
+
+        if (v43RttyUsbKey != Q_NULLPTR)
+            v43RttyConfigForm->addRow(
+                tr("USB Keying (RTTY)"),
+                v43RttyUsbKey);
+
+        if (v43RttyKeypad != Q_NULLPTR)
+            v43RttyConfigForm->addRow(
+                tr("External Keypad RTTY"),
+                v43RttyKeypad);
+
+        if (v43RttyDecodeBaud != Q_NULLPTR)
+            v43RttyConfigForm->addRow(
+                tr("Decoded Data Baud Rate"),
+                v43RttyDecodeBaud);
+    }
+// IC7610_V39_RTTY_SET_SIGNALS
+    set7610ConnectCheckU8(
+        "setExternalKeypadRttyChk", func7610ExternalKeypadRTTY);
+    set7610ConnectComboU8(
+        "setDecodeBaudCombo", func7610DecodeBaud);
+    set7610ConnectComboU8(
+        "setRttyFftAvgCombo", func7610RTTYFFTAverage);
+    set7610ConnectCheckU8(
+        "setRttyDecodeUsosChk", func7610RTTYDecodeUSOS);
+    set7610ConnectComboU8(
+        "setRttyNewLineCombo", func7610RTTYNewLine);
+    set7610ConnectComboU8(
+        "setRttyDiddleCombo", func7610RTTYDiddle);
+    set7610ConnectCheckU8(
+        "setRttyTxUsosChk", func7610RTTYTXUSOS);
+    set7610ConnectCheckU8(
+        "setRttyAutoCrlfChk", func7610RTTYAutoCRLF);
+    set7610ConnectCheckU8(
+        "setRttyTimestampChk", func7610RTTYTimestamp);
+    set7610ConnectComboU8(
+        "setRttyTimestampTimeCombo", func7610RTTYTimestampTime);
+    set7610ConnectCheckU8(
+        "setRttyTimestampFreqChk", func7610RTTYTimestampFreq);
+    set7610ConnectCheckU8(
+        "setRttyDecodeLogChk", func7610RTTYDecodeLog);
+    set7610ConnectComboU8(
+        "setRttyLogFileTypeCombo", func7610RTTYLogFileType);
+    set7610ConnectComboU8(
+        "setCivTimeoutCombo", func7610CIVTimeout);
+
+    set7610ConnectComboU8(
+        "setRttyMarkCombo", func7610RTTYMarkFreq);
+    set7610ConnectComboU8(
+        "setRttyShiftCombo", func7610RTTYShiftWidth);
+    set7610ConnectComboU8(
+        "setRttyPolarityCombo", func7610RTTYKeyPolarity);
+
+    set7610ConnectCheckU8(
+        "setCwSyncChk", func7610SSBCWSyncTune);
+    set7610ConnectComboU8(
+        "setCwNormalSideCombo", func7610CWNormalSide);
+
+    set7610ConnectComboU8(
+        "setUsbKeyCwCombo", func7610USBKeyCW);
+    set7610ConnectComboU8(
+        "setUsbKeyRttyCombo", func7610USBKeyRTTY);
+
+    set7610ConnectComboU16(
+        "setCivRemoteAddrCombo", func7610CIVRemoteAddress);
+    set7610ConnectComboU8(
+        "setCivUsbPortCombo", func7610CIVUSBPort);
+    set7610ConnectCheckU8(
+        "setCivUsbEchoChk", func7610CIVUSBEcho);
+
+    set7610ConnectPercent16(
+        "setSideToneLevelSpin", func7610SideToneLevel);
+    set7610ConnectCheckU8(
+        "setSideToneLimitChk", func7610SideToneLimit);
+    set7610ConnectSpinU8(
+        "setKeyerRepeatSpin", func7610KeyerRepeat, 0);
+
+    set7610ConnectComboU8(
+        "setCwRiseCombo", func7610CWRiseTime);
+    set7610ConnectComboU8(
+        "setPaddlePolarityCombo", func7610PaddlePolarity);
+    set7610ConnectComboU8(
+        "setKeyTypeCombo", func7610KeyType);
+    set7610ConnectCheckU8(
+        "setMicUpDownKeyerChk", func7610MicUpDownKeyer);
+
+    {
+        QCheckBox *showVa =
+                findChild<QCheckBox*>(QStringLiteral("setShowVaMeterChk"));
+        QWidget *vaRow =
+                findChild<QWidget*>(QStringLiteral("ic7610VaMeterRow"));
+        if (showVa != Q_NULLPTR && vaRow != Q_NULLPTR) {
+            showVa->blockSignals(true);
+            showVa->setChecked(vaRow->isVisible());
+            showVa->blockSignals(false);
+            connect(showVa, &QCheckBox::toggled, this, [=](bool checked) {
+                vaRow->setVisible(checked);
+            });
+        }
+    }
+    // IC7610_V23_SET_SIGNAL_HELPERS_END
+// IC7610_EXT_SIGNALS_END
 
     // Slider tooltip
     connect(ui->txPowerSlider, &QSlider::sliderMoved,

@@ -105,6 +105,12 @@ public:
     void setOutputGainDB(float dB);
 
     // Spectrum capture — thread-safe; call from main thread.
+    // IC7610_V49_CW_TAP
+    // When enabled, cwTapAudio() delivers mono RX audio taken after
+    // NR / EQ / output gain and before the CW sidetone mix.
+    void setCwTapEnabled(bool en) { m_cwTapEnabled.store(en, std::memory_order_relaxed); }
+    bool cwTapEnabled() const { return m_cwTapEnabled.load(std::memory_order_relaxed); }
+
     void setSpectrumEnabled(bool en);
     void setSpectrumFps(int fps);   // 1–60; default 10
 
@@ -162,6 +168,8 @@ public slots:
 
 signals:
     void rxInputLevel(float peak);
+    // IC7610_V49_CW_TAP: mono samples for the CW decoder (converter thread).
+    void cwTapAudio(QVector<float> mono, float sampleRate);
     void rxOutputLevel(float peak);
     // Emitted when the audio stream channel count changes (1 or 2).
     void rxAudioChannelsChanged(int channels);
@@ -262,6 +270,11 @@ private:
     // SPEC_FFT_LEN is declared public above.
     std::atomic<bool> m_specEnabled   { false };
     std::atomic<int>  m_specTargetFps { 10 };
+
+    // IC7610_V49_CW_TAP
+    std::atomic<bool> m_cwTapEnabled  { false };
+    void emitCwTap(const Eigen::VectorXf &samples, int channels,
+                   int channelSelect, float sampleRate);
 
     rfft_plan              m_specFftPlan  { nullptr };
     std::vector<double>    m_specFftBuf;

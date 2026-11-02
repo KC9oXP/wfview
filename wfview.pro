@@ -132,7 +132,7 @@ QMAKE_TARGET_BUNDLE_PREFIX = org.wfview
 !win32:DEFINES += HOST=\\\"`hostname`\\\" UNAME=\\\"`whoami`\\\"
 !win32:DEFINES += GITSHORT="\\\"$(shell git -C \"$$PWD\" rev-parse --short HEAD)\\\""
 
-win32:DEFINES += GITSHORT=\\\"$$system(git -C $$PWD rev-parse --short HEAD)\\\"
+win32:DEFINES += GITSHORT=\\\"$$system(git -C $$shell_quote($$PWD) rev-parse --short HEAD)\\\"
 win32:DEFINES += HOST=\\\"$$system(hostname)\\\"
 win32:DEFINES += UNAME=\\\"$$system(echo %USERNAME%)\\\"
 
@@ -311,6 +311,8 @@ INCLUDEPATH += src/audio/resampler
 INCLUDEPATH += src/audio/speexdspmini/src
 INCLUDEPATH += src/audio/speexdspmini/include
 INCLUDEPATH += src/audio/anr
+# IC7610_V49_CW_DECODER: ggmorse (MIT) for the CW decoder
+INCLUDEPATH += src/ggmorse/include
 INCLUDEPATH += src
 
 # speexdspmini: self-contained Speex preprocessor (no system libspeexdsp needed)
@@ -333,6 +335,9 @@ SOURCES += \
     src/audio/spectrumwidget.cpp \
     src/audio/txaudioprocessor.cpp \
     src/audio/rxaudioprocessor.cpp \
+    src/ic7610cwdecoder.cpp \
+    src/ggmorse/src/ggmorse.cpp \
+    src/ggmorse/src/resampler.cpp \
     src/audio/anr/loguru.cpp \
     src/audio/anr/NoiseReduction.cpp \
     src/audio/anr/RealFFTf.cpp \
@@ -429,6 +434,9 @@ HEADERS  += \
     include/txaudioprocessingwidget.h \
     include/txaudioprocessor.h \
     include/rxaudioprocessor.h \
+    include/ic7610cwdecoder.h \
+    include/ic7610cwcore.h \
+    include/ic7610cwhand.h \
     include/rxaudioprocessingwidget.h \
     include/collapsiblesection.h \
     src/audio/speexnrprocessor.h \
