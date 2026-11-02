@@ -568,20 +568,75 @@ void meter::drawValue_Linear(QPainter *qp, bool reverse) {
     }
     // And then, we can just plot them, since we already scaled
     // the scales, right?
+    // IC7610_V34_METER_COLORS
+    // Keep ordinary meters on the user's selected wfview theme color.
+    // Limit/status meters use explicit colors so their state is readable
+    // immediately regardless of the configured theme.
+    QColor activeColor = currentColor;
+    const QColor okColor(QStringLiteral("#2e9d50"));
+    const QColor warnColor(QStringLiteral("#d49a00"));
+    const QColor alarmColor(QStringLiteral("#d83b3b"));
+
+    switch (meterType) {
+    case meterPower:
+        // IC-7610 is a 100 W-class transmitter.
+        activeColor = (current <= 100.0) ? okColor : warnColor;
+        break;
+
+    case meterSWR:
+        if (current >= 3.0)
+            activeColor = alarmColor;
+        else if (current >= 1.9) // IC7610_V36_SWR_19
+            activeColor = warnColor;
+        else
+            activeColor = okColor;
+        break;
+
+    case meterALC:
+        // wfview's ALC engineering scale is 0.0..2.0,
+        // where 1.0 represents 100 percent.
+        // Low/no ALC is not a fault, so only warn above 50 percent.
+        if (current > 1.0)
+            activeColor = alarmColor;
+        else if (current > 0.50)
+            activeColor = warnColor;
+        else
+            activeColor = okColor;
+        break;
+
+    case meterVoltage:
+        // User-selected IC-7610 Vd thresholds.
+        if ((current < 11.9) || (current >= 15.4))
+            activeColor = alarmColor;
+        else if ((current < 12.2) || (current > 15.18))
+            activeColor = warnColor;
+        else
+            activeColor = okColor;
+        break;
+
+    case meterCurrent:
+        // 23 A is the IC-7610 rated 100 W transmit consumption figure.
+        activeColor = (current <= 23.0) ? okColor : warnColor;
+        break;
+
+    default:
+        break;
+    }
+
     if(useGradients) {
         QLinearGradient grad(QPointF(0, 0), QPointF(255, 0));
         if(reverse) {
-            grad.setColorAt(1, currentColor.darker().darker());
-            grad.setColorAt(0, currentColor.lighter());
+            grad.setColorAt(1, activeColor.darker().darker());
+            grad.setColorAt(0, activeColor.lighter());
         } else {
-            grad.setColorAt(0, currentColor.darker().darker());
-            grad.setColorAt(1, currentColor.lighter());
+            grad.setColorAt(0, activeColor.darker().darker());
+            grad.setColorAt(1, activeColor.lighter());
         }
         qp->setBrush(grad);
     } else {
-        qp->setBrush(currentColor);
+        qp->setBrush(activeColor);
     }
-    qp->setPen(currentColor);
+    qp->setPen(activeColor);
     if(reverse) {
         qp->drawRect(255+mXstart,mYstart,-currentRect,barHeight);
     } else {

@@ -1000,6 +1000,7 @@ void icomCommander::parseCommand()
 	
         value.setValue(bcdHexToUChar(payloadIn.at(0),payloadIn.at(1)));
         break;
+    case funcAudioPeakFilter:
     case funcAGC:
     case funcAGCTimeConstant:
     case funcBreakIn:   // This is 0,1 or 2
@@ -1075,7 +1076,6 @@ void icomCommander::parseCommand()
     case funcMainSubTracking:
     case funcSatelliteMode:
     case funcNoiseBlanker:
-    case funcAudioPeakFilter:
     case funcNoiseReduction:
     case funcAutoNotch:
     case funcRepeaterTone:
@@ -1094,6 +1094,10 @@ void icomCommander::parseCommand()
     case funcVariousSql:
     case funcRXAntenna:
     case funcIPPlus:
+    // IC7610_V25_BOOL_DECODER
+    case funcQuickDualWatch:
+    case funcCIVTransceive:
+    case funcCIVOutput:
     case funcBeepLevelLimit:
     case funcBeepConfirmation:
         value.setValue(static_cast<bool>(payloadIn.at(0)));
@@ -1180,12 +1184,18 @@ void icomCommander::parseCommand()
         break;
     }
     case funcAFMute:
-        // TODO add AF Mute
+        value.setValue(static_cast<bool>(payloadIn.at(0)));
         break;
     // 0x1a 0x05 various registers below are 2 byte (0-255) as uchar
     case funcREFAdjust:
     case funcREFAdjustFine:
-    case funcACCAModLevel:
+    // IC7610_V27_LEVEL_DECODER
+    case funcACCAFOutputLevel:
+    case funcACCIFOutputLevel:
+    case funcUSBAFOutputLevel:
+    case funcUSBIFOutputLevel:    // IC7610_V37_TWO_BYTE_DECODER
+    case func7610CIVRemoteAddress:
+    case func7610SideToneLevel:    case funcACCAModLevel:
     case funcACCBModLevel:
     case funcUSBModLevel:
     case funcLANModLevel:
@@ -1209,9 +1219,46 @@ void icomCommander::parseCommand()
         }
         break;
     }
-    case funcDashRatio:
+    // IC7610_V27_SELECT_DECODER
+    case funcACCOutputSelect:
+    case funcUSBOutputSelect:
+    case funcLANOutputSelect:
+    case funcREFInput:    // IC7610_V37_U8_DECODER
+    // IC7610_V39_RTTY_U8_DECODER
+    case func7610ExternalKeypadRTTY:
+    case func7610DecodeBaud:
+    case func7610RTTYFFTAverage:
+    case func7610RTTYDecodeUSOS:
+    case func7610RTTYNewLine:
+    case func7610RTTYDiddle:
+    case func7610RTTYTXUSOS:
+    case func7610RTTYAutoCRLF:
+    case func7610RTTYTimestamp:
+    case func7610RTTYTimestampTime:
+    case func7610RTTYTimestampFreq:
+    case func7610RTTYDecodeLog:
+    case func7610RTTYLogFileType:
+    case func7610CIVTimeout:
+    case func7610RTTYMarkFreq:
+    case func7610RTTYShiftWidth:
+    case func7610RTTYKeyPolarity:
+    case func7610SSBCWSyncTune:
+    case func7610CWNormalSide:
+    case func7610USBKeyCW:
+    case func7610USBKeyRTTY:
+    case func7610CIVUSBPort:
+    case func7610CIVUSBEcho:
+    case func7610SideToneLimit:
+    case func7610KeyerRepeat:
+    case func7610CWRiseTime:
+    case func7610PaddlePolarity:
+    case func7610KeyType:
+    case func7610MicUpDownKeyer:    case funcDashRatio:
     case funcNBDepth:
     case funcVOXDelay:
+    case funcVOXVoiceDelay:
+    case funcAPFType:
+    case funcAPFTypeLevel:
         value.setValue(bcdHexToUChar(payloadIn.at(0)));
         break;
     // Time & date functions

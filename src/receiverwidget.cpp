@@ -232,6 +232,68 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
             filterShapeCombo->addItem("Soft",1);
         }
     }
+    // IC7610_V23_RECEIVER_CONTROLS_BEGIN
+    ic7610AgcLabel = new QLabel(tr("AGC"));
+    ic7610AgcCombo = new QComboBox();
+    ic7610AgcCombo->setObjectName(
+                QStringLiteral("ic7610AgcCombo_%1").arg(receiver));
+    ic7610AgcCombo->addItem(tr("FAST"), 1);
+    ic7610AgcCombo->addItem(tr("MID"), 2);
+    ic7610AgcCombo->addItem(tr("SLOW"), 3);
+    ic7610AgcCombo->setCurrentIndex(-1);
+    ic7610AgcCombo->setEnabled(false); // first GET must arrive before editing
+    ic7610AgcCombo->setMinimumWidth(72);
+    ic7610AgcCombo->setToolTip(tr("IC-7610 AGC speed"));
+
+    ic7610ExtButton = new QPushButton(tr("7610 EXT"));
+    ic7610ExtButton->setObjectName(
+                QStringLiteral("ic7610ExtButton_%1").arg(receiver));
+    ic7610ExtButton->setToolTip(
+                tr("Open IC-7610 extended controls and radio SET controls"));
+
+    const bool show7610Strip =
+            (receiver == 0 &&
+             rigCaps != Q_NULLPTR &&
+             rigCaps->modelName.contains(
+                 QStringLiteral("7610"), Qt::CaseInsensitive));
+
+    ic7610AgcLabel->setVisible(show7610Strip);
+    ic7610AgcCombo->setVisible(show7610Strip);
+    ic7610ExtButton->setVisible(show7610Strip);
+    ic7610ExtButton->setEnabled(show7610Strip);
+
+    connect(ic7610AgcCombo,
+            static_cast<void (QComboBox::*)(int)>(&QComboBox::activated),
+            this, [=](int index) {
+        if (index < 0 || !show7610Strip ||
+            rigCaps == Q_NULLPTR ||
+            !rigCaps->commands.contains(funcAGC))
+            return;
+
+        const uchar value =
+                static_cast<uchar>(
+                    ic7610AgcCombo->itemData(index).toUInt());
+
+        queue->add(
+                    priorityImmediate,
+                    queueItem(funcAGC,
+                              QVariant::fromValue<uchar>(value),
+                              false,
+                              receiver));
+
+        // Radio readback wins.
+        queue->add(priorityMediumHigh, funcAGC, false, receiver);
+    });
+
+    connect(ic7610ExtButton, &QPushButton::clicked, this, [=]() {
+        emit requestIC7610Ext(receiver);
+    });
+
+    if (show7610Strip &&
+        rigCaps->commands.contains(funcAGC)) {
+        queue->add(priorityMediumHigh, funcAGC, false, receiver);
+    }
+    // IC7610_V23_RECEIVER_CONTROLS_END
     roofingCombo = new QComboBox();
     roofingCombo->setToolTip(tr("Select roofing filter"));
     roofingCombo->setAccessibleDescription(tr("Change the current selected roofing filter"));
@@ -276,6 +338,10 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
     controlLayout->addWidget(dataCombo);
     controlLayout->addWidget(filterCombo);
     controlLayout->addWidget(filterShapeCombo);
+    // IC7610_V23_RECEIVER_LAYOUT
+    controlLayout->addWidget(ic7610AgcLabel);
+    controlLayout->addWidget(ic7610AgcCombo);
+    controlLayout->addWidget(ic7610ExtButton);
     controlLayout->addWidget(roofingCombo);
     controlLayout->addSpacerItem(midSpacer);
     controlLayout->addWidget(clearPeaksButton);
@@ -672,6 +738,21 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
 }
 
 
+void receiverWidget::setIC7610AGC(uchar value)
+{
+    // IC7610_V23_AGC_METHOD
+    if (ic7610AgcCombo == Q_NULLPTR)
+        return;
+
+    const int index = ic7610AgcCombo->findData(value);
+    if (index < 0)
+        return;
+
+    ic7610AgcCombo->blockSignals(true);
+    ic7610AgcCombo->setCurrentIndex(index);
+    ic7610AgcCombo->setEnabled(true);
+    ic7610AgcCombo->blockSignals(false);
+}
 receiverWidget::~receiverWidget(){
 
     QMutableVectorIterator<bandIndicator> it(bandIndicators);
