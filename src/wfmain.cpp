@@ -1139,6 +1139,11 @@ void wfmain::setupMainUI()
                 ui->horizontalLayout_16->addWidget(cwDecodeBtn);
         }
         connect(cwDecodeBtn, &QPushButton::clicked, this, [this]() {
+            // IC7610_V54_CW_MERGE_BTN: the decoder lives in the CW window.
+            if (cw != Q_NULLPTR) {
+                on_cwButton_clicked();
+                return;
+            }
             auto *win = findChild<Ic7610CwDecoderWindow*>(
                     QStringLiteral("ic7610CwDecoderWin"), Qt::FindDirectChildrenOnly);
             if (!win) {
@@ -8161,10 +8166,9 @@ void wfmain::receiveValue(cacheItem val){
         if (cw != Q_NULLPTR) {
             cw->handlePitch(val.value.value<quint16>());
         }
-        // IC7610_V49_CW_DECODER_PITCH
-        if (auto *cwDec = findChild<Ic7610CwDecoderWindow*>(
-                    QStringLiteral("ic7610CwDecoderWin"), Qt::FindDirectChildrenOnly)) {
-            cwDec->setRadioPitch(static_cast<int>(val.value.value<quint16>()));
+        // IC7610_V49_CW_DECODER_PITCH (v54: all panels, IC7610_V54_CW_PITCH_ALL)
+        for (Ic7610CwDecoderPanel *cwDecP : findChildren<Ic7610CwDecoderPanel*>()) {
+            cwDecP->setRadioPitch(static_cast<int>(val.value.value<quint16>()));
         }
         break;
 
@@ -8829,6 +8833,27 @@ void wfmain::receiveRigCaps(rigCapabilities* caps)
             cw->setSidetoneEnable(prefs.cwSidetoneEnabled);
             cw->setSidetoneLevel(prefs.cwSidetoneLevel);
             cw->setMacroText(prefs.cwMacroList);
+
+            // IC7610_V54_CW_MERGE: CW decoder panel inside the CW Sender
+            // window, above its send transcript.
+            {
+                auto *cwDecPanel = new Ic7610CwDecoderPanel(rxProc, cw);
+                cwDecPanel->setObjectName(QStringLiteral("ic7610CwDecoderPanel"));
+                QVBoxLayout *cwRxLayout = cw->findChild<QVBoxLayout*>(QStringLiteral("verticalLayout_7"));
+                if (cwRxLayout != Q_NULLPTR) {
+                    cwRxLayout->insertWidget(0, cwDecPanel, 3);
+                } else {
+                    cwDecPanel->hide();
+                    qWarning() << "IC7610 v54: CW Sender layout not found; decoder panel hidden";
+                }
+                connect(cwDecPanel, &Ic7610CwDecoderPanel::radioPitchRequested, this, [this]() {
+                    if (queue != Q_NULLPTR && connStatus == connConnected)
+                        queue->add(priorityImmediate, funcCwPitch, false, false);
+                });
+                connect(cw, &cwSender::sendCW, cwDecPanel, &Ic7610CwDecoderPanel::appendSent);
+                cw->setWindowTitle(tr("CW Sender / Decoder"));
+                cw->resize(cw->size().expandedTo(QSize(980, 860)));
+            }
         }
 
         ui->cwButton->setEnabled(rigCaps->commands.contains(funcSendCW));

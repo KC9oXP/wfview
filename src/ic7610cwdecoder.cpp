@@ -1,11 +1,13 @@
 // ic7610cwdecoder.cpp
 //
 // IC7610_V49_CW_DECODER (layout + pitch tracking reworked in v50;
-// engine selector and WAV recorder added in v51: IC7610_V51_CW_HANDKEY)
+// engine selector and WAV recorder added in v51: IC7610_V51_CW_HANDKEY;
+// panel + CW Sender merge: IC7610_V54_CW_MERGE; multi-signal: IC7610_V54_CW_MULTI)
 // See include/ic7610cwdecoder.h for the data flow.
 
 #include "ic7610cwdecoder.h"
 #include "ic7610cwcore.h"
+#include "ic7610cwmulti.h"
 #include "rxaudioprocessor.h"
 
 #include <QCheckBox>
@@ -20,6 +22,12 @@
 #include <QFontDatabase>
 #include <QFontMetrics>
 #include <QGridLayout>
+#include <QBrush>
+#include <QColor>
+#include <QHeaderView>
+#include <QHideEvent>
+#include <QTableWidget>
+#include <QTextCharFormat>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMetaType>
@@ -57,6 +65,7 @@ Ic7610CwDecoderWorker::Ic7610CwDecoderWorker(QObject *parent)
       m_core(new Ic7610CwCore())
 {
     m_statsTimer.start();
+    m_multiTimer.start();
 }
 
 Ic7610CwDecoderWorker::~Ic7610CwDecoderWorker()
@@ -104,6 +113,27 @@ void Ic7610CwDecoderWorker::pushAudio(QVector<float> mono, float sampleRate)
     m_core->feed(mono.constData(), static_cast<int>(mono.size()), sampleRate, out);
     if (!out.empty()) {
         emit textDecoded(QString::fromLatin1(out.data(), static_cast<int>(out.size())));
+    }
+
+    // ---- multi-signal ------------------------------------------------------
+    if (m_multi) {
+        m_multiDirty |= m_multi->feed(mono.constData(), static_cast<int>(mono.size()), sampleRate);
+        if (m_multiTimer.elapsed() >= 300) {
+            m_multiTimer.restart();
+            QVariantList list;
+            for (const auto &c : m_multi->channels()) {
+                QVariantMap m;
+                m.insert(QStringLiteral("id"), c.id);
+                m.insert(QStringLiteral("pitch"), static_cast<double>(c.pitchHz));
+                m.insert(QStringLiteral("wpm"), static_cast<double>(c.wpm));
+                m.insert(QStringLiteral("snr"), static_cast<double>(c.snrDb));
+                m.insert(QStringLiteral("active"), c.active);
+                m.insert(QStringLiteral("text"), QString::fromLatin1(c.text.data(), static_cast<int>(c.text.size())));
+                list.append(m);
+            }
+            emit multiUpdated(list);
+            m_multiDirty = false;
+        }
     }
 
     if (m_statsTimer.elapsed() >= 250) {
@@ -207,19 +237,27 @@ void Ic7610CwDecoderWorker::finishRecording()
 }
 void Ic7610CwDecoderWorker::resetDecoder()         { m_core->reset(); }
 
+void Ic7610CwDecoderWorker::setMulti(bool on)
+{
+    if (on && !m_multi) {
+        m_multi.reset(new Ic7610CwMulti());
+        m_multi->setRange(200.0f, 2000.0f);
+    } else if (!on && m_multi) {
+        m_multi.reset();
+        emit multiUpdated(QVariantList());
+    }
+}
+
 // ===========================================================================
 // Window (GUI thread)
 // ===========================================================================
 
-Ic7610CwDecoderWindow::Ic7610CwDecoderWindow(RxAudioProcessor *rxProc, QWidget *parent)
-    : QDialog(parent),
+Ic7610CwDecoderPanel::Ic7610CwDecoderPanel(RxAudioProcessor *rxProc, QWidget *parent)
+    : QWidget(parent),
       m_rxProc(rxProc)
 {
     qRegisterMetaType<QVector<float>>("QVector<float>");
-
-    setObjectName(QStringLiteral("ic7610CwDecoderWin"));
-    setWindowTitle(tr("CW Decoder"));
-    setModal(false);
+    qRegisterMetaType<QVariantList>("QVariantList");
 
     // IC7610_V50_CW_LAYOUT
     // qdarkstyle gives spin/combo boxes 5px padding all round, which clips
@@ -230,7 +268,7 @@ Ic7610CwDecoderWindow::Ic7610CwDecoderWindow(RxAudioProcessor *rxProc, QWidget *
         " padding-left: 4px; min-width: 0px; }"));
 
     auto *root = new QVBoxLayout(this);
-    root->setSizeConstraint(QLayout::SetMinimumSize);   // never shrink below the controls
+    root->setContentsMargins(0, 0, 0, 0);
 
     const QFontMetrics fm(font());
     const int rowH = fm.height() + 12;
@@ -273,6 +311,13 @@ Ic7610CwDecoderWindow::Ic7610CwDecoderWindow(RxAudioProcessor *rxProc, QWidget *
                                  "about a second behind."));
     fitCombo(m_engineCombo);
     row1->addWidget(m_engineCombo);
+
+    row1->addSpacing(16);
+    m_multiChk = new QCheckBox(tr("Multi-signal"), this);
+    m_multiChk->setToolTip(tr("Also decode every other CW signal in the receive passband\n"
+                              "(widen the radio's filter to see more). One line per station;\n"
+                              "double-click a line to make it the main decode."));
+    row1->addWidget(m_multiChk);
 
     row1->addStretch(1);
 
@@ -336,7 +381,25 @@ Ic7610CwDecoderWindow::Ic7610CwDecoderWindow(RxAudioProcessor *rxProc, QWidget *
     mono.setPointSizeF(mono.pointSizeF() * 1.25);
     m_text->setFont(mono);
     m_text->setMinimumHeight(QFontMetrics(mono).lineSpacing() * 6);
-    root->addWidget(m_text, 1);
+    root->addWidget(m_text, 2);
+
+    // --- multi-signal list (IC7610_V54_CW_MULTI) ----------------------------
+    m_multiTable = new QTableWidget(0, 3, this);
+    m_multiTable->setHorizontalHeaderLabels({tr("Pitch"), tr("WPM"), tr("Decoded")});
+    m_multiTable->verticalHeader()->setVisible(false);
+    m_multiTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_multiTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_multiTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_multiTable->setWordWrap(false);
+    m_multiTable->setFont(mono);
+    m_multiTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    m_multiTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    m_multiTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    m_multiTable->setMinimumHeight(QFontMetrics(mono).lineSpacing() * 5);
+    m_multiTable->setToolTip(tr("Every CW signal found in the passband. Double-click a line\n"
+                                "to decode that station in the main window (Fixed pitch)."));
+    m_multiTable->setVisible(false);
+    root->addWidget(m_multiTable, 2);
 
     // --- recorder row (IC7610_V51_CW_HANDKEY) -------------------------------
     auto *recRow = new QHBoxLayout();
@@ -359,10 +422,6 @@ Ic7610CwDecoderWindow::Ic7610CwDecoderWindow(RxAudioProcessor *rxProc, QWidget *
     m_status->setMinimumHeight(fm.height() * 2 + 4);   // room for a wrapped line
     root->addWidget(m_status);
 
-    // Start comfortably larger than the minimum.
-    const QSize minSz = root->minimumSize();
-    resize(qMax(minSz.width() + 120, fm.horizontalAdvance(QLatin1Char('M')) * 60),
-           qMax(minSz.height() + 160, fm.height() * 18));
 
     // --- worker thread -----------------------------------------------------
     m_thread = new QThread(this);
@@ -371,11 +430,13 @@ Ic7610CwDecoderWindow::Ic7610CwDecoderWindow(RxAudioProcessor *rxProc, QWidget *
     m_worker->moveToThread(m_thread);
     connect(m_thread, &QThread::finished, m_worker, &QObject::deleteLater);
     connect(m_worker, &Ic7610CwDecoderWorker::textDecoded,
-            this, &Ic7610CwDecoderWindow::onTextDecoded);
+            this, &Ic7610CwDecoderPanel::onTextDecoded);
     connect(m_worker, &Ic7610CwDecoderWorker::statsUpdated,
-            this, &Ic7610CwDecoderWindow::onStatsUpdated);
+            this, &Ic7610CwDecoderPanel::onStatsUpdated);
     connect(m_worker, &Ic7610CwDecoderWorker::recordingProgress,
-            this, &Ic7610CwDecoderWindow::onRecordingProgress);
+            this, &Ic7610CwDecoderPanel::onRecordingProgress);
+    connect(m_worker, &Ic7610CwDecoderWorker::multiUpdated,
+            this, &Ic7610CwDecoderPanel::onMultiUpdated);
     m_thread->start(QThread::LowPriority);
 
     // --- radio pitch re-read while following the radio ---------------------
@@ -389,7 +450,7 @@ Ic7610CwDecoderWindow::Ic7610CwDecoderWindow(RxAudioProcessor *rxProc, QWidget *
     });
 
     // --- UI wiring ---------------------------------------------------------
-    connect(m_enable, &QCheckBox::toggled, this, &Ic7610CwDecoderWindow::onEnableToggled);
+    connect(m_enable, &QCheckBox::toggled, this, &Ic7610CwDecoderPanel::onEnableToggled);
     connect(m_squelchChk, &QCheckBox::toggled, this, [this](bool on) {
         QMetaObject::invokeMethod(m_worker, "setSquelch", Qt::QueuedConnection, Q_ARG(bool, on));
     });
@@ -398,17 +459,33 @@ Ic7610CwDecoderWindow::Ic7610CwDecoderWindow(RxAudioProcessor *rxProc, QWidget *
         applyDecodeSettings();
     });
     connect(m_pitchSpin, qOverload<int>(&QSpinBox::valueChanged),
-            this, &Ic7610CwDecoderWindow::applyDecodeSettings);
+            this, &Ic7610CwDecoderPanel::applyDecodeSettings);
     connect(m_speedMode, qOverload<int>(&QComboBox::currentIndexChanged),
-            this, &Ic7610CwDecoderWindow::applyDecodeSettings);
+            this, &Ic7610CwDecoderPanel::applyDecodeSettings);
     connect(m_speedSpin, qOverload<int>(&QSpinBox::valueChanged),
-            this, &Ic7610CwDecoderWindow::applyDecodeSettings);
+            this, &Ic7610CwDecoderPanel::applyDecodeSettings);
     connect(m_clearBtn, &QPushButton::clicked, m_text, &QPlainTextEdit::clear);
     connect(m_engineCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int) {
         QMetaObject::invokeMethod(m_worker, "setEngine", Qt::QueuedConnection,
                                   Q_ARG(int, m_engineCombo->currentData().toInt()));
     });
-    connect(m_recordBtn, &QPushButton::clicked, this, &Ic7610CwDecoderWindow::onRecordClicked);
+    connect(m_recordBtn, &QPushButton::clicked, this, &Ic7610CwDecoderPanel::onRecordClicked);
+    connect(m_multiChk, &QCheckBox::toggled, this, [this](bool on) {
+        m_multiTable->setVisible(on);
+        if (!on) m_multiTable->setRowCount(0);
+        QMetaObject::invokeMethod(m_worker, "setMulti", Qt::QueuedConnection, Q_ARG(bool, on));
+    });
+    connect(m_multiTable, &QTableWidget::cellDoubleClicked, this, [this](int row, int) {
+        QTableWidgetItem *it = m_multiTable->item(row, 0);
+        if (!it) return;
+        const int hz = it->data(Qt::UserRole).toInt();
+        if (hz < 200 || hz > 1200) return;
+        m_pitchSpin->setValue(hz);
+        m_pitchMode->setCurrentIndex(m_pitchMode->findData(kPitchFixed));
+        QMetaObject::invokeMethod(m_worker, "resetDecoder", Qt::QueuedConnection);
+        applyDecodeSettings();
+        appendColored(tr("\n[now decoding %1 Hz]\n").arg(hz), QColor(120, 170, 255));
+    });
     connect(m_openClipsBtn, &QPushButton::clicked, this, [this]() {
         const QString dir = clipFolder();
         QDir().mkpath(dir);
@@ -422,7 +499,7 @@ Ic7610CwDecoderWindow::Ic7610CwDecoderWindow(RxAudioProcessor *rxProc, QWidget *
     applyDecodeSettings();
 }
 
-Ic7610CwDecoderWindow::~Ic7610CwDecoderWindow()
+Ic7610CwDecoderPanel::~Ic7610CwDecoderPanel()
 {
     disconnectTap();
     if (m_rxProc) m_rxProc->setCwTapEnabled(false);
@@ -432,7 +509,7 @@ Ic7610CwDecoderWindow::~Ic7610CwDecoderWindow()
     }
 }
 
-void Ic7610CwDecoderWindow::setRxProcessor(RxAudioProcessor *rxProc)
+void Ic7610CwDecoderPanel::setRxProcessor(RxAudioProcessor *rxProc)
 {
     if (rxProc == m_rxProc.data()) return;
     const bool on = m_enable->isChecked();
@@ -442,7 +519,7 @@ void Ic7610CwDecoderWindow::setRxProcessor(RxAudioProcessor *rxProc)
     if (on) connectTap();
 }
 
-void Ic7610CwDecoderWindow::setRadioPitch(int hz)
+void Ic7610CwDecoderPanel::setRadioPitch(int hz)
 {
     if (hz < 200 || hz > 1200) return;
     if (hz == m_radioPitchHz) return;
@@ -452,14 +529,20 @@ void Ic7610CwDecoderWindow::setRadioPitch(int hz)
     }
 }
 
-void Ic7610CwDecoderWindow::closeEvent(QCloseEvent *event)
+void Ic7610CwDecoderPanel::stopDecoding()
 {
-    // Closing the window stops decoding so no CPU is spent in the background.
     m_enable->setChecked(false);
-    QDialog::closeEvent(event);
 }
 
-void Ic7610CwDecoderWindow::connectTap()
+void Ic7610CwDecoderPanel::hideEvent(QHideEvent *event)
+{
+    // Closing the host window stops decoding so no CPU is spent in the
+    // background. Minimising (a spontaneous hide) keeps decoding.
+    if (!event->spontaneous()) stopDecoding();
+    QWidget::hideEvent(event);
+}
+
+void Ic7610CwDecoderPanel::connectTap()
 {
     if (!m_rxProc) {
         m_status->setText(tr("No RX audio processor - connect to the radio first."));
@@ -473,7 +556,7 @@ void Ic7610CwDecoderWindow::connectTap()
     m_rxProc->setCwTapEnabled(true);
 }
 
-void Ic7610CwDecoderWindow::disconnectTap()
+void Ic7610CwDecoderPanel::disconnectTap()
 {
     if (m_tapConn) {
         QObject::disconnect(m_tapConn);
@@ -481,7 +564,7 @@ void Ic7610CwDecoderWindow::disconnectTap()
     }
 }
 
-void Ic7610CwDecoderWindow::onEnableToggled(bool on)
+void Ic7610CwDecoderPanel::onEnableToggled(bool on)
 {
     if (on) {
         QMetaObject::invokeMethod(m_worker, "resetDecoder", Qt::QueuedConnection);
@@ -490,6 +573,8 @@ void Ic7610CwDecoderWindow::onEnableToggled(bool on)
                                   Q_ARG(bool, m_squelchChk->isChecked()));
         QMetaObject::invokeMethod(m_worker, "setEngine", Qt::QueuedConnection,
                                   Q_ARG(int, m_engineCombo->currentData().toInt()));
+        QMetaObject::invokeMethod(m_worker, "setMulti", Qt::QueuedConnection,
+                                  Q_ARG(bool, m_multiChk->isChecked()));
         connectTap();
         m_recordBtn->setEnabled(true);
         if (m_pitchMode->currentData().toInt() == kPitchFollowRadio) {
@@ -508,7 +593,7 @@ void Ic7610CwDecoderWindow::onEnableToggled(bool on)
     }
 }
 
-void Ic7610CwDecoderWindow::applyDecodeSettings()
+void Ic7610CwDecoderPanel::applyDecodeSettings()
 {
     const int pm = m_pitchMode->currentData().toInt();
     m_pitchSpin->setEnabled(pm == kPitchFixed);
@@ -529,7 +614,7 @@ void Ic7610CwDecoderWindow::applyDecodeSettings()
     QMetaObject::invokeMethod(m_worker, "setSpeedWpm", Qt::QueuedConnection, Q_ARG(float, wpm));
 }
 
-void Ic7610CwDecoderWindow::onTextDecoded(const QString &text)
+void Ic7610CwDecoderPanel::onTextDecoded(const QString &text)
 {
     if (!m_enable->isChecked()) return;
 
@@ -538,7 +623,7 @@ void Ic7610CwDecoderWindow::onTextDecoded(const QString &text)
 
     QTextCursor c(m_text->document());
     c.movePosition(QTextCursor::End);
-    c.insertText(text);
+    c.insertText(text, QTextCharFormat());   // default colour (after any [TX] line)
 
     const int chars = m_text->document()->characterCount();
     if (chars > kMaxTextChars) {
@@ -551,7 +636,7 @@ void Ic7610CwDecoderWindow::onTextDecoded(const QString &text)
     if (atBottom) sb->setValue(sb->maximum());
 }
 
-void Ic7610CwDecoderWindow::onStatsUpdated(float pitchHz, float speedWpm, float snrDb,
+void Ic7610CwDecoderPanel::onStatsUpdated(float pitchHz, float speedWpm, float snrDb,
                                            bool locked, bool squelchOpen, float sampleRate)
 {
     if (!m_enable->isChecked()) return;
@@ -584,7 +669,7 @@ void Ic7610CwDecoderWindow::onStatsUpdated(float pitchHz, float speedWpm, float 
 
 // ---- WAV recorder (IC7610_V51_CW_HANDKEY) ---------------------------------
 
-QString Ic7610CwDecoderWindow::clipFolder() const
+QString Ic7610CwDecoderPanel::clipFolder() const
 {
     // This build lives under D:\wfbuild testing; keep clips with it when
     // that folder exists, otherwise use Documents.
@@ -594,7 +679,7 @@ QString Ic7610CwDecoderWindow::clipFolder() const
             + QStringLiteral("/wfview-cw-clips");
 }
 
-void Ic7610CwDecoderWindow::onRecordClicked()
+void Ic7610CwDecoderPanel::onRecordClicked()
 {
     if (m_recording) {
         QMetaObject::invokeMethod(m_worker, "stopRecording", Qt::QueuedConnection);
@@ -610,7 +695,7 @@ void Ic7610CwDecoderWindow::onRecordClicked()
                               Q_ARG(QString, path), Q_ARG(int, 60));
 }
 
-void Ic7610CwDecoderWindow::onRecordingProgress(const QString &path, int seconds, bool finished)
+void Ic7610CwDecoderPanel::onRecordingProgress(const QString &path, int seconds, bool finished)
 {
     if (finished) {
         m_recording = false;
@@ -622,4 +707,109 @@ void Ic7610CwDecoderWindow::onRecordingProgress(const QString &path, int seconds
         return;
     }
     m_recLabel->setText(tr("Recording... %1 s").arg(seconds));
+}
+
+// ---- multi-signal list (IC7610_V54_CW_MULTI) --------------------------------
+
+void Ic7610CwDecoderPanel::onMultiUpdated(const QVariantList &channels)
+{
+    if (!m_multiChk->isChecked() || !m_enable->isChecked()) {
+        m_multiTable->setRowCount(0);
+        return;
+    }
+    const int keepSel = m_multiTable->currentRow() >= 0 && m_multiTable->item(m_multiTable->currentRow(), 0)
+            ? m_multiTable->item(m_multiTable->currentRow(), 0)->data(Qt::UserRole + 1).toInt() : -1;
+    m_multiTable->setRowCount(channels.size());
+    const QFontMetrics fm(m_multiTable->font());
+    const int textCol = qMax(10, m_multiTable->columnWidth(2) / qMax(1, fm.horizontalAdvance(QLatin1Char('M'))) - 1);
+    for (int r = 0; r < channels.size(); ++r) {
+        const QVariantMap m = channels.at(r).toMap();
+        const int hz = qRound(m.value(QStringLiteral("pitch")).toDouble());
+        const double wpm = m.value(QStringLiteral("wpm")).toDouble();
+        const bool active = m.value(QStringLiteral("active")).toBool();
+        QString text = m.value(QStringLiteral("text")).toString().trimmed();
+        if (text.size() > textCol) text = QStringLiteral("...") + text.right(textCol - 3);
+
+        auto put = [&](int col, const QString &s, Qt::Alignment al) {
+            QTableWidgetItem *it = m_multiTable->item(r, col);
+            if (!it) { it = new QTableWidgetItem(); m_multiTable->setItem(r, col, it); }
+            it->setText(s);
+            it->setTextAlignment(al | Qt::AlignVCenter);
+            it->setForeground(active ? QBrush() : QBrush(QColor(140, 140, 140)));
+            return it;
+        };
+        QTableWidgetItem *p = put(0, QStringLiteral("%1 Hz").arg(hz), Qt::AlignRight);
+        p->setData(Qt::UserRole, hz);
+        p->setData(Qt::UserRole + 1, m.value(QStringLiteral("id")).toInt());
+        put(1, wpm > 0.0 ? QString::number(wpm, 'f', 0) : QStringLiteral("--"), Qt::AlignRight);
+        put(2, text, Qt::AlignLeft);
+        if (keepSel >= 0 && m.value(QStringLiteral("id")).toInt() == keepSel) m_multiTable->selectRow(r);
+    }
+}
+
+// ---- sent text (IC7610_V54_CW_MERGE) ----------------------------------------
+
+void Ic7610CwDecoderPanel::appendColored(const QString &text, const QColor &color)
+{
+    QScrollBar *sb = m_text->verticalScrollBar();
+    const bool atBottom = (sb->value() >= sb->maximum() - 4);
+    QTextCharFormat f;
+    f.setForeground(color);
+    QTextCursor c(m_text->document());
+    c.movePosition(QTextCursor::End);
+    c.insertText(text, f);
+    if (atBottom) sb->setValue(sb->maximum());
+}
+
+void Ic7610CwDecoderPanel::appendSent(const QString &text)
+{
+    // "Send immediately" mode sends one character at a time; collect them
+    // and show one [TX] line once sending pauses.
+    if (text.isEmpty()) return;
+    m_txPending += text;
+    if (!m_txTimer) {
+        m_txTimer = new QTimer(this);
+        m_txTimer->setSingleShot(true);
+        m_txTimer->setInterval(1500);
+        connect(m_txTimer, &QTimer::timeout, this, [this]() {
+            const QString t = m_txPending.simplified().toUpper();
+            m_txPending.clear();
+            if (t.isEmpty()) return;
+            const QString doc = m_text->toPlainText();
+            const QString lead = (doc.isEmpty() || doc.endsWith(QLatin1Char('\n')))
+                    ? QString() : QStringLiteral("\n");
+            appendColored(lead + QStringLiteral("[TX] ") + t + QStringLiteral("\n"),
+                          QColor(255, 170, 60));
+        });
+    }
+    m_txTimer->start();
+}
+
+// ===========================================================================
+// Stand-alone window wrapper
+// ===========================================================================
+
+Ic7610CwDecoderWindow::Ic7610CwDecoderWindow(RxAudioProcessor *rxProc, QWidget *parent)
+    : QDialog(parent)
+{
+    setObjectName(QStringLiteral("ic7610CwDecoderWin"));
+    setWindowTitle(tr("CW Decoder"));
+    setModal(false);
+    auto *lay = new QVBoxLayout(this);
+    m_panel = new Ic7610CwDecoderPanel(rxProc, this);
+    m_panel->setObjectName(QStringLiteral("ic7610CwDecoderPanelStandalone"));
+    lay->addWidget(m_panel);
+    connect(m_panel, &Ic7610CwDecoderPanel::radioPitchRequested,
+            this, &Ic7610CwDecoderWindow::radioPitchRequested);
+    const QFontMetrics fm(font());
+    resize(fm.horizontalAdvance(QLatin1Char('M')) * 64, fm.height() * 26);
+}
+
+void Ic7610CwDecoderWindow::setRxProcessor(RxAudioProcessor *rxProc) { m_panel->setRxProcessor(rxProc); }
+void Ic7610CwDecoderWindow::setRadioPitch(int hz) { m_panel->setRadioPitch(hz); }
+
+void Ic7610CwDecoderWindow::closeEvent(QCloseEvent *event)
+{
+    m_panel->stopDecoding();
+    QDialog::closeEvent(event);
 }

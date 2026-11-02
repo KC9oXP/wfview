@@ -438,6 +438,7 @@ HEADERS  += \
     include/ic7610cwcore.h \
     include/ic7610cwhand.h \
     include/ic7610cwwords.h \
+    include/ic7610cwmulti.h \
     include/rxaudioprocessingwidget.h \
     include/collapsiblesection.h \
     src/audio/speexnrprocessor.h \
