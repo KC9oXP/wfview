@@ -90,6 +90,11 @@ ApplicationWindow {
         function onTextAppended(text) {
             rttyWindow.appendLimited(rxText, text)
         }
+        function onScopePoints(xy) {
+            // keep at most a few frames if painting falls behind
+            var p = scope.pending.concat(xy)
+            scope.pending = p.length > 3200 ? p.slice(p.length - 3200) : p
+        }
     }
 
     Shortcut { sequence: "F1"; onActivated: if (rtty) rtty.sendMacro(0) }
@@ -127,181 +132,270 @@ ApplicationWindow {
         anchors.margins: 10
         spacing: 6
 
-        // ---- receive controls ------------------------------------------------
+        // ---- controls (left) and tuning scope (right) -----------------------
         RowLayout {
             Layout.fillWidth: true
             spacing: 10
 
-            CheckBox {
-                text: qsTr("Decode")
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("Decode RTTY from the receive audio (after NR, before RX mute).")
-                checked: rtty ? rtty.decoding : false
-                onToggled: if (rtty) rtty.decoding = checked
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 6
+
+                // ---- receive controls ------------------------------------------------
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+
+                    CheckBox {
+                        text: qsTr("Decode")
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("Decode RTTY from the receive audio (after NR, before RX mute).")
+                        checked: rtty ? rtty.decoding : false
+                        onToggled: if (rtty) rtty.decoding = checked
+                    }
+
+                    Label { text: qsTr("Squelch:") }
+                    Slider {
+                        id: squelchSlider
+                        Layout.preferredWidth: 140
+                        from: 0
+                        to: 0.8
+                        stepSize: 0.02
+                        value: rtty ? rtty.squelch : 0.5
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("Print only while the signal quality is above this level.\n"
+                                           + "Band noise sits near 0.4; a usable signal is 0.5 or more. Far left = off.")
+                        onMoved: if (rtty) rtty.squelch = value
+                    }
+                    Label {
+                        text: rtty && rtty.squelch > 0 ? rtty.squelch.toFixed(2) : qsTr("off")
+                        Layout.preferredWidth: 32
+                    }
+
+                    Button {
+                        text: qsTr("Auto-tune")
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("Find the strongest tone pair one shift apart in the last few seconds\n"
+                                           + "and set the mark tone to it (needs Decode on).")
+                        onClicked: if (rtty) rtty.autoTune()
+                    }
+                    Button {
+                        text: qsTr("Re-sync")
+                        onClicked: if (rtty) rtty.resync()
+                    }
+                    Button {
+                        text: qsTr("Clear")
+                        onClicked: rxText.text = ""
+                    }
+                    CheckBox {
+                        text: qsTr("Reverse")
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("Swap mark and space (for an upside-down station).")
+                        checked: rtty ? rtty.reverse : false
+                        onToggled: if (rtty) rtty.reverse = checked
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+
+                // ---- tones and format ------------------------------------------------
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    Label { text: qsTr("Baud:") }
+                    ComboBox {
+                        model: ["45.45", "50", "75", "100"]
+                        implicitContentWidthPolicy: ComboBox.WidestText
+                        currentIndex: rtty ? Math.max(0, rttyWindow.indexOfValue(rttyWindow.baudRates, rtty.baud)) : 0
+                        onActivated: function(index) { if (rtty) rtty.baud = rttyWindow.baudRates[index] }
+                    }
+
+                    Label { text: qsTr("Shift:") }
+                    ComboBox {
+                        model: ["170", "200", "425", "850"]
+                        implicitContentWidthPolicy: ComboBox.WidestText
+                        currentIndex: rtty ? Math.max(0, rttyWindow.indexOfValue(rttyWindow.shifts, rtty.shift)) : 0
+                        onActivated: function(index) { if (rtty) rtty.shift = rttyWindow.shifts[index] }
+                    }
+
+                    Label { text: qsTr("Mark:") }
+                    SpinBox {
+                        id: markSpin
+                        from: 300
+                        to: 3000
+                        stepSize: 5
+                        editable: true
+                        value: rtty ? rtty.markHz : 2295
+                        textFromValue: function(v) { return v + " Hz" }
+                        valueFromText: function(t) { return parseInt(t) }
+                        onValueModified: if (rtty) rtty.markHz = value
+                    }
+                    Label {
+                        text: rtty ? qsTr("Space: %1 Hz").arg(rtty.spaceHz) : ""
+                        color: rttyWindow.palette.windowText
+                    }
+
+                    Label { text: qsTr("Sideband:") }
+                    ComboBox {
+                        model: ["USB", "LSB"]
+                        implicitContentWidthPolicy: ComboBox.WidestText
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("The radio's sideband (USB-D / LSB-D). It decides which audio tone is mark,\n"
+                                           + "so the RF signal has mark above space as usual.")
+                        currentIndex: rtty && !rtty.usb ? 1 : 0
+                        onActivated: function(index) { if (rtty) rtty.usb = (index === 0) }
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    Label { text: qsTr("Stop bits:") }
+                    ComboBox {
+                        model: ["1", "1.5", "2"]
+                        implicitContentWidthPolicy: ComboBox.WidestText
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("For transmit. The decoder accepts any stop length.")
+                        currentIndex: rtty ? Math.max(0, rttyWindow.indexOfValue(rttyWindow.stopBitChoices, rtty.stopBits)) : 1
+                        onActivated: function(index) { if (rtty) rtty.stopBits = rttyWindow.stopBitChoices[index] }
+                    }
+                    CheckBox {
+                        text: qsTr("USOS")
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("Unshift on space: back to letters after every space (receive and transmit).")
+                        checked: rtty ? rtty.usos : true
+                        onToggled: if (rtty) rtty.usos = checked
+                    }
+                    Label { text: qsTr("Figures:") }
+                    ComboBox {
+                        model: [qsTr("US TTY"), qsTr("ITA2")]
+                        implicitContentWidthPolicy: ComboBox.WidestText
+                        currentIndex: rtty && rtty.ita2 ? 1 : 0
+                        onActivated: function(index) { if (rtty) rtty.ita2 = (index === 1) }
+                    }
+                    Label { text: qsTr("My call:") }
+                    TextField {
+                        Layout.preferredWidth: 110
+                        text: rtty ? rtty.myCall : ""
+                        placeholderText: qsTr("for {MYCALL}")
+                        onEditingFinished: if (rtty) rtty.myCall = text
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+
+                // ---- tuning indicator ------------------------------------------------
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    Label { text: qsTr("Mark") }
+                    LevelBar {
+                        fraction: rtty ? rtty.markDb / 40 : 0
+                        fill: rttyWindow.palette.highlight
+                        back: rttyWindow.palette.base
+                        edge: rttyWindow.palette.mid
+                    }
+                    Label { text: qsTr("Space") }
+                    LevelBar {
+                        fraction: rtty ? rtty.spaceDb / 40 : 0
+                        fill: rttyWindow.palette.highlight
+                        back: rttyWindow.palette.base
+                        edge: rttyWindow.palette.mid
+                    }
+                    Label { text: qsTr("Quality") }
+                    LevelBar {
+                        fraction: rtty ? rtty.quality : 0
+                        fill: rtty && rtty.squelchOpen ? "#3a9a3a" : rttyWindow.palette.mid
+                        back: rttyWindow.palette.base
+                        edge: rttyWindow.palette.mid
+                    }
+                    Label {
+                        text: rtty ? rtty.quality.toFixed(2) : ""
+                        Layout.preferredWidth: 32
+                    }
+                    Item { Layout.fillWidth: true }
+                }
             }
 
-            Label { text: qsTr("Squelch:") }
-            Slider {
-                id: squelchSlider
-                Layout.preferredWidth: 140
-                from: 0
-                to: 0.8
-                stepSize: 0.02
-                value: rtty ? rtty.squelch : 0.5
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("Print only while the signal quality is above this level.\n"
-                                   + "Band noise sits near 0.4; a usable signal is 0.5 or more. Far left = off.")
-                onMoved: if (rtty) rtty.squelch = value
-            }
-            Label {
-                text: rtty && rtty.squelch > 0 ? rtty.squelch.toFixed(2) : qsTr("off")
-                Layout.preferredWidth: 32
-            }
+            // MMTTY-style crossed-ellipse tuning scope: X = mark filter,
+            // Y = space filter. A tuned signal draws a clean "+".
+            Rectangle {
+                id: scopeFrame
+                Layout.fillHeight: true
+                Layout.preferredWidth: height
+                Layout.minimumWidth: 110
+                color: "black"
+                border.color: "#1f5f2f"
+                radius: 3
+                ToolTip.visible: scopeHover.containsMouse
+                ToolTip.text: qsTr("Tuning scope: mark tone = horizontal line, space tone = vertical line.\n"
+                                   + "Well tuned: a clean +. Tilted lines or ellipses: off frequency or wrong shift.\n"
+                                   + "Noise only: a round blob.")
 
-            Button {
-                text: qsTr("Auto-tune")
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("Find the strongest tone pair one shift apart in the last few seconds\n"
-                                   + "and set the mark tone to it (needs Decode on).")
-                onClicked: if (rtty) rtty.autoTune()
-            }
-            Button {
-                text: qsTr("Re-sync")
-                onClicked: if (rtty) rtty.resync()
-            }
-            Button {
-                text: qsTr("Clear")
-                onClicked: rxText.text = ""
-            }
-            Item { Layout.fillWidth: true }
-        }
+                MouseArea {
+                    id: scopeHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.NoButton
+                }
 
-        // ---- tones and format ------------------------------------------------
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 8
+                Canvas {
+                    id: scope
+                    anchors.fill: parent
+                    anchors.margins: 3
+                    property var pending: []
+                    property bool wipe: true
+                    readonly property bool live: rttyWindow.visible && rtty !== null && rtty.decoding && !rtty.transmitting
+                    onLiveChanged: { wipe = true; requestPaint() }
 
-            Label { text: qsTr("Baud:") }
-            ComboBox {
-                model: ["45.45", "50", "75", "100"]
-                implicitContentWidthPolicy: ComboBox.WidestText
-                currentIndex: rtty ? Math.max(0, rttyWindow.indexOfValue(rttyWindow.baudRates, rtty.baud)) : 0
-                onActivated: function(index) { if (rtty) rtty.baud = rttyWindow.baudRates[index] }
-            }
+                    onPaint: {
+                        var ctx = getContext("2d")
+                        var w = width, h = height
+                        if (wipe) {
+                            ctx.fillStyle = "black"
+                            ctx.fillRect(0, 0, w, h)
+                            wipe = false
+                        } else {
+                            // phosphor decay: each frame dims what is already on the screen
+                            ctx.fillStyle = "rgba(0, 0, 0, 0.28)"
+                            ctx.fillRect(0, 0, w, h)
+                        }
+                        ctx.strokeStyle = "rgba(40, 140, 70, 0.30)"
+                        ctx.lineWidth = 1
+                        ctx.beginPath()
+                        ctx.moveTo(w / 2, 0); ctx.lineTo(w / 2, h)
+                        ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2)
+                        ctx.stroke()
 
-            Label { text: qsTr("Shift:") }
-            ComboBox {
-                model: ["170", "200", "425", "850"]
-                implicitContentWidthPolicy: ComboBox.WidestText
-                currentIndex: rtty ? Math.max(0, rttyWindow.indexOfValue(rttyWindow.shifts, rtty.shift)) : 0
-                onActivated: function(index) { if (rtty) rtty.shift = rttyWindow.shifts[index] }
-            }
+                        var p = pending
+                        pending = []
+                        var cx = w / 2, cy = h / 2
+                        var r = Math.min(w, h) / 2 - 3
+                        ctx.fillStyle = "rgba(40, 255, 100, 0.22)" // glow
+                        for (var i = 0; i + 1 < p.length; i += 2)
+                            ctx.fillRect(cx + p[i] * r - 1.5, cy - p[i + 1] * r - 1.5, 3, 3)
+                        ctx.fillStyle = "#8dffa8" // bright core
+                        for (var j = 0; j + 1 < p.length; j += 2)
+                            ctx.fillRect(cx + p[j] * r - 0.5, cy - p[j + 1] * r - 0.5, 1.2, 1.2)
+                    }
 
-            Label { text: qsTr("Mark:") }
-            SpinBox {
-                id: markSpin
-                from: 300
-                to: 3000
-                stepSize: 5
-                editable: true
-                value: rtty ? rtty.markHz : 2295
-                textFromValue: function(v) { return v + " Hz" }
-                valueFromText: function(t) { return parseInt(t) }
-                onValueModified: if (rtty) rtty.markHz = value
-            }
-            Label {
-                text: rtty ? qsTr("Space: %1 Hz").arg(rtty.spaceHz) : ""
-                color: rttyWindow.palette.windowText
-            }
+                    Timer {
+                        interval: 66
+                        repeat: true
+                        running: scope.live
+                        onTriggered: scope.requestPaint()
+                    }
+                }
 
-            Label { text: qsTr("Sideband:") }
-            ComboBox {
-                model: ["USB", "LSB"]
-                implicitContentWidthPolicy: ComboBox.WidestText
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("The radio's sideband (USB-D / LSB-D). It decides which audio tone is mark,\n"
-                                   + "so the RF signal has mark above space as usual.")
-                currentIndex: rtty && !rtty.usb ? 1 : 0
-                onActivated: function(index) { if (rtty) rtty.usb = (index === 0) }
+                Label {
+                    anchors.centerIn: parent
+                    visible: !scope.live
+                    text: rtty && rtty.transmitting ? qsTr("TX") : qsTr("Decode off")
+                    color: "#2f7f45"
+                }
             }
-            CheckBox {
-                text: qsTr("Reverse")
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("Swap mark and space (for an upside-down station).")
-                checked: rtty ? rtty.reverse : false
-                onToggled: if (rtty) rtty.reverse = checked
-            }
-            Item { Layout.fillWidth: true }
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 8
-
-            Label { text: qsTr("Stop bits:") }
-            ComboBox {
-                model: ["1", "1.5", "2"]
-                implicitContentWidthPolicy: ComboBox.WidestText
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("For transmit. The decoder accepts any stop length.")
-                currentIndex: rtty ? Math.max(0, rttyWindow.indexOfValue(rttyWindow.stopBitChoices, rtty.stopBits)) : 1
-                onActivated: function(index) { if (rtty) rtty.stopBits = rttyWindow.stopBitChoices[index] }
-            }
-            CheckBox {
-                text: qsTr("USOS")
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("Unshift on space: back to letters after every space (receive and transmit).")
-                checked: rtty ? rtty.usos : true
-                onToggled: if (rtty) rtty.usos = checked
-            }
-            Label { text: qsTr("Figures:") }
-            ComboBox {
-                model: [qsTr("US TTY"), qsTr("ITA2")]
-                implicitContentWidthPolicy: ComboBox.WidestText
-                currentIndex: rtty && rtty.ita2 ? 1 : 0
-                onActivated: function(index) { if (rtty) rtty.ita2 = (index === 1) }
-            }
-            Label { text: qsTr("My call:") }
-            TextField {
-                Layout.preferredWidth: 110
-                text: rtty ? rtty.myCall : ""
-                placeholderText: qsTr("for {MYCALL}")
-                onEditingFinished: if (rtty) rtty.myCall = text
-            }
-            Item { Layout.fillWidth: true }
-        }
-
-        // ---- tuning indicator ------------------------------------------------
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 8
-
-            Label { text: qsTr("Mark") }
-            LevelBar {
-                fraction: rtty ? rtty.markDb / 40 : 0
-                fill: rttyWindow.palette.highlight
-                back: rttyWindow.palette.base
-                edge: rttyWindow.palette.mid
-            }
-            Label { text: qsTr("Space") }
-            LevelBar {
-                fraction: rtty ? rtty.spaceDb / 40 : 0
-                fill: rttyWindow.palette.highlight
-                back: rttyWindow.palette.base
-                edge: rttyWindow.palette.mid
-            }
-            Label { text: qsTr("Quality") }
-            LevelBar {
-                fraction: rtty ? rtty.quality : 0
-                fill: rtty && rtty.squelchOpen ? "#3a9a3a" : rttyWindow.palette.mid
-                back: rttyWindow.palette.base
-                edge: rttyWindow.palette.mid
-            }
-            Label {
-                text: rtty ? rtty.quality.toFixed(2) : ""
-                Layout.preferredWidth: 32
-            }
-            Item { Layout.fillWidth: true }
         }
 
         // ---- receive text (also shows [TX] echo) -----------------------------

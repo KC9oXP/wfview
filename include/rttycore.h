@@ -259,3 +259,39 @@ RttyTonePair rttyFindTonePair(const float *x,
                               double tolHz = 25.0,
                               double loHz = 250.0,
                               double hiHz = 3200.0);
+
+// Crossed-ellipse tuning scope (as in MMTTY): X = audio through a narrow
+// band-pass on the mark tone, Y = the same on the space tone. A mark tone
+// draws a horizontal line, a space tone a vertical one, so a well-tuned
+// signal makes a "+"; mistuning tilts the lines into ellipses and noise
+// makes a blob. Output points are scaled to about -1..1 by a slow peak
+// follower so the picture size does not depend on the audio level.
+class RttyScope
+{
+public:
+    struct Point
+    {
+        float x;
+        float y;
+    };
+
+    // Filter bandwidth follows baud and shift (narrower than the shift).
+    void setConfig(double sampleRate, double markHz, double spaceHz, double baud, double shiftHz);
+    // Process audio; appends every 'step'-th filtered sample as a point.
+    void process(const float *in, size_t n, size_t step, std::vector<Point> &out);
+    void reset();
+
+private:
+    struct Biquad
+    {
+        double b0 = 0, b2 = 0, a1 = 0, a2 = 0; // b1 = 0 for this band-pass
+        double x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+        void design(double sampleRate, double f0, double bw);
+        double run(double x);
+    };
+
+    Biquad m_mark[2], m_space[2]; // two sections each for cleaner lines
+    double m_peak = 1e-3;
+    double m_decay = 0.9999;
+    size_t m_phase = 0;
+};

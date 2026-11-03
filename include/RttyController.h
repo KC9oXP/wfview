@@ -23,6 +23,7 @@
 #include <QString>
 #include <QStringList>
 #include <QTimer>
+#include <QVariant>
 #include <QVector>
 #include <memory>
 #include <vector>
@@ -51,6 +52,8 @@ signals:
     // Levels in dB above the noise floor; quality 0..1.
     void statsUpdated(double quality, double markDb, double spaceDb, bool squelchOpen, double sampleRate);
     void tonesFound(bool found, double lowHz, double highHz, double levelDb);
+    // Crossed-ellipse scope points, flat [x0, y0, x1, y1, ...] in -1..1, about 15 frames a second.
+    void scopeUpdated(QVariantList xy);
 
 private:
     void applyConfig();
@@ -58,6 +61,9 @@ private:
     RttyConfig m_cfg;
     double m_squelch = 0.0;
     RttyDemodulator m_demod;
+    RttyScope m_scope;
+    std::vector<RttyScope::Point> m_scopePts;
+    QElapsedTimer m_scopeTimer;
     std::vector<float> m_history; // last few seconds, for findTones()
     QElapsedTimer m_statsTimer;
 };
@@ -263,11 +269,14 @@ signals:
     void macrosChanged();
     void statsChanged();
     void statusChanged();
+    // Points for the tuning scope (see RttyDecoderWorker::scopeUpdated).
+    void scopePoints(QVariantList xy);
 
 private slots:
     void onTextDecoded(const QString &text);
     void onStatsUpdated(double quality, double markDb, double spaceDb, bool squelchOpen, double sampleRate);
     void onTonesFound(bool found, double lowHz, double highHz, double levelDb);
+    void onScopeUpdated(const QVariantList &xy);
     void pollTx();
 
 private:

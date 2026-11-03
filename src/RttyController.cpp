@@ -21,6 +21,9 @@ constexpr int txPollMs = 40;
 constexpr double prerollSeconds = 0.30; // mark before the first character (PTT settling)
 constexpr double tailSeconds = 0.15; // mark after the last character
 constexpr qint64 txStartTimeoutMs = 3000;
+constexpr int scopeIntervalMs = 66; // ~15 frames per second
+constexpr double scopePointsPerSecond = 4500.0;
+constexpr size_t scopeMaxPoints = 400; // per frame
 
 double levelDb(double level, double noise)
 {
@@ -50,6 +53,7 @@ RttyDecoderWorker::RttyDecoderWorker(QObject *parent)
 {
     m_cfg.sampleRate = 0.0; // set by the first audio block
     m_statsTimer.start();
+    m_scopeTimer.start();
 }
 
 void RttyDecoderWorker::applyConfig()
@@ -58,6 +62,7 @@ void RttyDecoderWorker::applyConfig()
         return;
     m_demod.setConfig(m_cfg);
     m_demod.setSquelch(m_squelch);
+    m_scope.setConfig(m_cfg.sampleRate, m_cfg.markHz, m_cfg.spaceHz(), m_cfg.baud, m_cfg.shiftHz);
 }
 
 void RttyDecoderWorker::pushAudio(QVector<float> mono, float sampleRate)
@@ -79,6 +84,23 @@ void RttyDecoderWorker::pushAudio(QVector<float> mono, float sampleRate)
     const size_t keep = static_cast<size_t>(historySeconds * sampleRate);
     if (m_history.size() > 2 * keep)
         m_history.erase(m_history.begin(), m_history.end() - static_cast<std::ptrdiff_t>(keep));
+
+    const size_t step = static_cast<size_t>(std::max(1.0, sampleRate / scopePointsPerSecond));
+    m_scope.process(mono.constData(), static_cast<size_t>(mono.size()), step, m_scopePts);
+    if (m_scopeTimer.elapsed() >= scopeIntervalMs)
+    {
+        m_scopeTimer.restart();
+        const size_t first = m_scopePts.size() > scopeMaxPoints ? m_scopePts.size() - scopeMaxPoints : 0;
+        QVariantList xy;
+        xy.reserve(static_cast<int>(2 * (m_scopePts.size() - first)));
+        for (size_t i = first; i < m_scopePts.size(); ++i)
+        {
+            xy.append(static_cast<double>(m_scopePts[i].x));
+            xy.append(static_cast<double>(m_scopePts[i].y));
+        }
+        m_scopePts.clear();
+        emit scopeUpdated(xy);
+    }
 
     if (m_statsTimer.elapsed() >= statsIntervalMs)
     {
@@ -149,6 +171,7 @@ RttyController::RttyController(QObject *parent)
     connect(m_worker, &RttyDecoderWorker::textDecoded, this, &RttyController::onTextDecoded);
     connect(m_worker, &RttyDecoderWorker::statsUpdated, this, &RttyController::onStatsUpdated);
     connect(m_worker, &RttyDecoderWorker::tonesFound, this, &RttyController::onTonesFound);
+    connect(m_worker, &RttyDecoderWorker::scopeUpdated, this, &RttyController::onScopeUpdated);
     m_thread->start(QThread::LowPriority);
 
     m_txPoll.setInterval(txPollMs);
@@ -499,6 +522,12 @@ void RttyController::autoTune()
     QMetaObject::invokeMethod(m_worker, "findTones", Qt::QueuedConnection, Q_ARG(double, double(m_shift)));
 }
 
+void RttyController::onScopeUpdated(const QVariantList &xy)
+{
+    if (m_visible && m_decoding && !m_keyed)
+        emit scopePoints(xy);
+}
+
 void RttyController::onTonesFound(bool found, double lowHz, double highHz, double levelDb)
 {
     if (!found)
@@ -630,7 +659,7 @@ void RttyController::sendMacro(int index)
     }
     if (t.contains(QStringLiteral("{MYCALL}"), Qt::CaseInsensitive) && m_myCall.isEmpty())
     {
-        setStatus(tr("Enter your own call under Settings first (the macro uses {MYCALL})."));
+        setStatus(tr("Enter your own call in the My call field first (the macro uses {MYCALL})."));
         return;
     }
     send(t);

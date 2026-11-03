@@ -92,6 +92,7 @@ private slots:
     void squelchKeepsNoiseQuiet();
     void findsTonePair();
     void txSourceEchoesAndDecodes();
+    void scopeDrawsMarkAndSpaceOnTheirAxes();
 };
 
 void RttyTest::baudotRoundTrip()
@@ -214,6 +215,34 @@ void RttyTest::txSourceEchoesAndDecodes()
 
     tx.stop();
     QVERIFY(!tx.active());
+}
+
+void RttyTest::scopeDrawsMarkAndSpaceOnTheirAxes()
+{
+    const double sr = 48000.0, mark = 2295.0, space = 2125.0;
+    for (int which = 0; which < 2; ++which)
+    {
+        RttyScope scope;
+        scope.setConfig(sr, mark, space, 45.45, 170.0);
+        const double f = which == 0 ? mark : space;
+        std::vector<float> tone(48000);
+        for (size_t i = 0; i < tone.size(); ++i)
+            tone[i] = 0.3f * static_cast<float>(std::sin(2.0 * 3.14159265358979323846 * f * i / sr));
+        std::vector<RttyScope::Point> pts;
+        scope.process(tone.data(), tone.size(), 7, pts);
+        QVERIFY(pts.size() > 6000);
+        double sx = 0, sy = 0, peak = 0;
+        for (size_t i = pts.size() / 2; i < pts.size(); ++i)
+        { // after the filters settle
+            sx += std::fabs(pts[i].x);
+            sy += std::fabs(pts[i].y);
+            peak = std::max(peak, static_cast<double>(std::max(std::fabs(pts[i].x), std::fabs(pts[i].y))));
+        }
+        const double ratio = which == 0 ? sy / sx : sx / sy;
+        QVERIFY2(ratio < 0.25, qPrintable(QStringLiteral("cross-axis ratio %1").arg(ratio)));
+        QVERIFY(peak <= 1.0);
+        QVERIFY(peak > 0.7); // auto-scaled to fill most of the screen
+    }
 }
 
 int runRttyTests(int argc, char **argv)

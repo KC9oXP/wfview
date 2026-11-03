@@ -546,3 +546,70 @@ RttyTonePair rttyFindTonePair(
     r.levelDb = best - floorDb;
     return r;
 }
+
+// ---------------------------------------------------------------------------
+// Crossed-ellipse scope
+
+void RttyScope::Biquad::design(double sampleRate, double f0, double bw)
+{
+    // RBJ band-pass, 0 dB peak gain.
+    const double w0 = kTwoPi * f0 / sampleRate;
+    const double q = std::max(0.5, f0 / std::max(1.0, bw));
+    const double alpha = std::sin(w0) / (2.0 * q);
+    const double a0 = 1.0 + alpha;
+    b0 = alpha / a0;
+    b2 = -alpha / a0;
+    a1 = -2.0 * std::cos(w0) / a0;
+    a2 = (1.0 - alpha) / a0;
+    x1 = x2 = y1 = y2 = 0.0;
+}
+
+double RttyScope::Biquad::run(double x)
+{
+    const double y = b0 * x + b2 * x2 - a1 * y1 - a2 * y2;
+    x2 = x1;
+    x1 = x;
+    y2 = y1;
+    y1 = y;
+    return y;
+}
+
+void RttyScope::setConfig(double sampleRate, double markHz, double spaceHz, double baud, double shiftHz)
+{
+    if (sampleRate <= 0.0)
+        return;
+    // Wide enough to pass the keying, narrow enough to keep the other tone out.
+    const double bw = std::clamp(std::min(1.5 * baud, 0.6 * shiftHz), 20.0, 400.0);
+    for (Biquad &b : m_mark)
+        b.design(sampleRate, markHz, bw);
+    for (Biquad &b : m_space)
+        b.design(sampleRate, spaceHz, bw);
+    m_decay = std::exp(-1.0 / (0.7 * sampleRate)); // peak follower falls with ~0.7 s time constant
+    m_peak = 1e-3;
+}
+
+void RttyScope::reset()
+{
+    for (Biquad *b : {&m_mark[0], &m_mark[1], &m_space[0], &m_space[1]})
+        b->x1 = b->x2 = b->y1 = b->y2 = 0.0;
+    m_peak = 1e-3;
+    m_phase = 0;
+}
+
+void RttyScope::process(const float *in, size_t n, size_t step, std::vector<Point> &out)
+{
+    step = std::max<size_t>(1, step);
+    for (size_t i = 0; i < n; ++i)
+    {
+        const double x = m_mark[1].run(m_mark[0].run(in[i]));
+        const double y = m_space[1].run(m_space[0].run(in[i]));
+        const double a = std::max(std::fabs(x), std::fabs(y));
+        m_peak = std::max(a, m_peak * m_decay);
+        if (++m_phase >= step)
+        {
+            m_phase = 0;
+            const double s = 1.0 / (1.1 * std::max(m_peak, 1e-9));
+            out.push_back({static_cast<float>(x * s), static_cast<float>(y * s)});
+        }
+    }
+}
