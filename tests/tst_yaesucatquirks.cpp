@@ -17,6 +17,9 @@ private slots:
     void tunerAnswersPerModel();
     void ft991NarrowFollowsWidthCode();
     void compressorLevelOffset();
+    void ft991ToneModeIsSwapped();
+    void ft991MemoryTagIsAtTheEnd();
+    void rejectedMemoryReadIsAnEmptyChannel();
     void ft991aRigFileMatchesCat();
 };
 
@@ -101,6 +104,45 @@ void YaesuCatQuirksTest::compressorLevelOffset()
     QCOMPARE(yaesuCatQuirks::compressorLevelOffset(3, 3), 0); // FT-991 "PLyyy"
 }
 
+void YaesuCatQuirksTest::ft991ToneModeIsSwapped()
+{
+    QCOMPARE(ft991ToneModeSwap(0), 0);
+    QCOMPARE(ft991ToneModeSwap(1), 2); // wfview tone -> CT02 (encode)
+    QCOMPARE(ft991ToneModeSwap(2), 1); // wfview TSQL -> CT01 (encode/decode)
+    QCOMPARE(ft991ToneModeSwap(3), 3);
+    QCOMPARE(ft991ToneModeSwap(ft991ToneModeSwap(1)), 1);
+}
+
+void YaesuCatQuirksTest::ft991MemoryTagIsAtTheEnd()
+{
+    // Answer after "MT": channel, frequency, clarifier, RX/TX clar, mode, VFO/MEM,
+    // CTCSS, 00, shift, 0, then the 12-character tag.
+    const QByteArray d = "001"
+                         "446000000"
+                         "+0000"
+                         "0"
+                         "0"
+                         "4"
+                         "1"
+                         "0"
+                         "00"
+                         "0"
+                         "0"
+                         "SIMPLEX 446 ";
+    QCOMPARE(d.size(), 3 + ft991MemoryTagOffset + ft991MemoryTagLength);
+    QCOMPARE(QString::fromLatin1(d.mid(3 + ft991MemoryTagOffset, ft991MemoryTagLength)).trimmed(),
+             QStringLiteral("SIMPLEX 446"));
+}
+
+void YaesuCatQuirksTest::rejectedMemoryReadIsAnEmptyChannel()
+{
+    QCOMPARE(rejectedMemoryReadChannel(true, "MR012;"), 12);
+    QCOMPARE(rejectedMemoryReadChannel(true, "MR117;"), 117);
+    QCOMPARE(rejectedMemoryReadChannel(false, "MR012;"), -1);
+    QCOMPARE(rejectedMemoryReadChannel(true, "MT012;"), -1);
+    QCOMPARE(rejectedMemoryReadChannel(true, "MR;"), -1);
+}
+
 void YaesuCatQuirksTest::ft991aRigFileMatchesCat()
 {
     const QString path = QFINDTESTDATA("../rigs/FT-991A.rig");
@@ -116,12 +158,14 @@ void YaesuCatQuirksTest::ft991aRigFileMatchesCat()
 
     QHash<QString, QString> strings;
     QHash<QString, int> bytes;
+    QHash<QString, bool> canSet;
     const int commands = rig.beginReadArray("Commands");
     for (int i = 0; i < commands; ++i)
     {
         rig.setArrayIndex(i);
         strings.insert(rig.value("Type").toString(), rig.value("String").toString());
         bytes.insert(rig.value("Type").toString(), rig.value("Bytes").toInt());
+        canSet.insert(rig.value("Type").toString(), rig.value("SetCommand").toBool());
     }
     rig.endArray();
 
@@ -138,6 +182,9 @@ void YaesuCatQuirksTest::ft991aRigFileMatchesCat()
     QCOMPARE(strings.value("Data Mod Source"), QStringLiteral("EX070"));
     QCOMPARE(strings.value("SSB Mod Source"), QStringLiteral("EX106"));
     QCOMPARE(bytes.value("Power Meter"), 3);
+    // MT/MW set formats differ from what wfview writes; read only for now.
+    QCOMPARE(canSet.value("Memory Tag"), false);
+    QCOMPARE(canSet.value("Memory Write"), false);
 
     // Every width code is unique per mode and the widths only go up.
     const int widths = rig.beginReadArray("Widths");

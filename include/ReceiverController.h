@@ -65,6 +65,9 @@ class ReceiverController : public QObject
     Q_PROPERTY(int pbtOuter READ getPbtOuter WRITE setPbtOuter NOTIFY pbtOuterChanged)
     Q_PROPERTY(int ifShift READ getIfShift WRITE setIfShift NOTIFY ifShiftChanged)
     Q_PROPERTY(int filterWidth READ getFilterWidth WRITE setFilterWidth NOTIFY filterWidthChanged)
+    // Range for the filter width control, from the current mode (rig file Min/Max).
+    Q_PROPERTY(int filterWidthMin READ getFilterWidthMin NOTIFY modeChanged)
+    Q_PROPERTY(int filterWidthMax READ getFilterWidthMax NOTIFY modeChanged)
     Q_PROPERTY(colorPrefsType colors READ getColors WRITE setColors NOTIFY colorsChanged)
 
     Q_PROPERTY(QVariantMap uiSpecs READ getUiSpecs NOTIFY uiSpecsChanged)
@@ -179,6 +182,8 @@ public:
     int getPbtOuter() { return pbtOuter;}
     int getIfShift() { return ifShift;}
     int getFilterWidth() { return filterWidth;}
+    int getFilterWidthMin() const { return mode.bwMin > 0 ? mode.bwMin : 50; }
+    int getFilterWidthMax() const { return mode.bwMax > mode.bwMin ? mode.bwMax : qMax(mode.bwMin, 4000); }
     QString getDrawerTitle() { return drawerTitle;}
     colorPrefsType getColors()     const { return colors; }
 

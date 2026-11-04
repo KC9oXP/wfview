@@ -709,6 +709,8 @@ bool yaesuCommander::queueParsedExternalCommand(funcs func, const funcType &type
     case funcSMeterSqlStatus:
     case funcSplitStatus:
     case funcTransceiverStatus:
+        if (func == funcRepeaterTone && yaesuCatQuirks::isFt991(rigCaps.modelID))
+            return false; // FT-991 clients already use the radio's own CT values; pass through raw
         if (func == funcSplitStatus && yaesuCatQuirks::isFt991(rigCaps.modelID)) {
             // FT-991 clients set split with FT2 (off) / FT3 (on).
             const int split = yaesuCatQuirks::splitFromExternal(rigCaps.modelID, d.mid(0, 1).toInt(&ok));
@@ -1171,6 +1173,11 @@ void yaesuCommander::parseData(QByteArray data)
         case funcSMeterSqlStatus:
         case funcSplitStatus:
         case funcTransceiverStatus:
+            if (func == funcRepeaterTone && yaesuCatQuirks::isFt991(rigCaps.modelID)) {
+                // Report wfview's tone-mode numbering (1 = tone, 2 = TSQL).
+                value.setValue<uchar>(uchar(yaesuCatQuirks::ft991ToneModeSwap(d.mid(0, 1).toInt())));
+                break;
+            }
             value.setValue<bool>(d.mid(0,1).toUShort());
             break;
         case funcAfGain:
@@ -1324,6 +1331,16 @@ void yaesuCommander::parseData(QByteArray data)
         case funcMemoryTag:
         {
             memoryTagType tag;
+            if (yaesuCatQuirks::isFt991(rigCaps.modelID)) {
+                // FT-991: MT answer = channel(3) + channel block + 12-character tag.
+                tag.num = (quint16)d.mid(0, type.bytes).toUShort();
+                tag.en = true;
+                tag.name = QString::fromLatin1(d.mid(type.bytes + yaesuCatQuirks::ft991MemoryTagOffset,
+                                                     yaesuCatQuirks::ft991MemoryTagLength))
+                               .trimmed();
+                value.setValue(tag);
+                break;
+            }
             tag.num = (quint16)d.mid(0,type.bytes).toUShort();
             tag.en = (bool)d.mid(type.bytes,1).toShort();
             tag.name = QString(d.mid(type.bytes+1));
@@ -1396,9 +1413,22 @@ void yaesuCommander::parseData(QByteArray data)
             value.setValue(uchar(d.at(0)));
             break;
         case funcFA:
+        {
             qInfo(logRig()) << "Rig error, last command sent:" << funcString[lastCommand.func] << "(min:" << lastCommand.minValue << "max:" <<
                 lastCommand.maxValue << "bytes:" << lastCommand.bytes <<  ") data:" << lastCommand.data;
+            // A memory read answered with "?" is an empty channel. Report it as such
+            // (scan 4 = not in use) so the memory list moves on instead of stopping.
+            const int channel = yaesuCatQuirks::rejectedMemoryReadChannel(lastCommand.func == funcMemoryContents,
+                                                                           lastCommand.data);
+            if (channel > 0) {
+                memoryType mem;
+                mem.channel = quint16(channel);
+                mem.scan = 4;
+                func = funcMemoryContents;
+                value.setValue(mem);
+            }
             break;
+        }
         default:
             qWarning(logRig()).noquote() << "Unhandled command received from rig:" << funcString[func] << "value:" << d.mid(0,10);
             break;
@@ -1761,6 +1791,9 @@ void yaesuCommander::receiveCommand(funcs func, QVariant value, uchar receiver)
                         payload.append(QString::number(value.value<uchar>()).leftJustified(1, QChar('0')).toLatin1());
                     else
                         payload.append(QString::number(value.value<uchar>()).rightJustified(1, QChar('0')).toLatin1());
+                } else if (func == funcRepeaterTone && yaesuCatQuirks::isFt991(rigCaps.modelID)) {
+                    // FT-991: CT01 = tone squelch, CT02 = tone encode (wfview: 1 = tone, 2 = TSQL).
+                    payload.append(QByteArray::number(yaesuCatQuirks::ft991ToneModeSwap(value.value<uchar>())));
                 } else if (func == funcSplitStatus && yaesuCatQuirks::isFt991(rigCaps.modelID)) {
                     // FT-991: FT2 = transmit on VFO-A (split off), FT3 = transmit on VFO-B (split on).
                     payload.append(QByteArray::number(yaesuCatQuirks::splitSetValue(rigCaps.modelID, value.value<uchar>())));
