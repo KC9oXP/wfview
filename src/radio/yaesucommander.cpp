@@ -727,7 +727,7 @@ bool yaesuCommander::queueParsedExternalCommand(funcs func, const funcType &type
                            .value.value<modeInfo>();
         for (const auto &w : rigCaps.widths) {
             if (w.num == code && yaesuCatQuirks::widthAppliesToMode(w.bands, m.reg)) {
-                value.setValue<ushort>(w.hz);
+                value = QVariant::fromValue<ushort>(w.hz);
                 ok = true;
                 break;
             }
