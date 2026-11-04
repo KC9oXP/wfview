@@ -43,6 +43,8 @@ SOURCES += \
     $$PWD/tst_rigctld.cpp \
     $$PWD/tst_rigprotocols.cpp \
     $$PWD/tst_yaesucatquirks.cpp \
+    $$PWD/tst_audioscope.cpp \
+    $$PWD/../src/audio/audioscope.cpp \
     $$PWD/../src/cluster.cpp \
     $$PWD/../src/ControllerController.cpp \
     $$PWD/../src/audiorouting.cpp \
@@ -68,4 +70,5 @@ HEADERS += \
     $$PWD/../include/rigctld.h \
     $$PWD/../include/cachingqueue.h \
     $$PWD/../include/usbcontroller.h \
-    $$PWD/../include/yaesucatquirks.h
+    $$PWD/../include/yaesucatquirks.h \
+    $$PWD/../include/audioscope.h

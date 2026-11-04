@@ -1,4 +1,5 @@
 #include "MainController.h"
+#include "audioscope.h"
 
 #include "audiohandlertciinput.h"
 #include "audiohandlertcioutput.h"
@@ -506,6 +507,9 @@ void MainController::ensureAudioProcessors()
                     m_txAudioGainReduction = qBound(0.0, (1.0 - double(linearGain)) * 100.0, 100.0);
                     emit txAudioMetersChanged(m_txAudioInputLevel, m_txAudioOutputLevel, m_txAudioGainReduction);
                 });
+        connect(rxProc, &RxAudioProcessor::audioScopeFrame,
+                this, [this](QByteArray bins, double hzPerBin) { handleAudioScopeFrame(bins, hzPerBin); });
+        updateAudioScopeEnabled();
         connect(rxProc, &RxAudioProcessor::rxSpectrumBins,
                 this, [this](QVector<double> inBins, QVector<double> outBins, float rawSR) {
                     if (prefs->rxAudioProc.specInhibitDuringTx && m_transmitting)
@@ -636,6 +640,71 @@ void MainController::applyRxAudioProcPrefs(const rxAudioProcessingPrefs& p)
     m_rxSpectrumEnabled = p.spectrumEnabled;
     emit audioProcessingSpectrumStateChanged(m_txSpectrumEnabled, m_rxSpectrumEnabled);
     rxProc->setSpectrumFps(p.spectrumFPS);
+}
+
+void MainController::updateAudioScopeEnabled()
+{
+    if (!rxProc)
+        return;
+    const bool on = rigCaps && !rigCaps->hasSpectrum;
+    rxProc->setAudioScopeEnabled(on);
+    qInfo(logSystem()) << "Audio spectrum/waterfall" << (on ? "enabled (radio has no CAT scope)" : "disabled");
+}
+
+void MainController::handleAudioScopeFrame(const QByteArray &bins, double hzPerBin)
+{
+    if (!rigCaps || rigCaps->hasSpectrum || receivers.isEmpty() || !receivers[0] || bins.size() < 2 || hzPerBin <= 0.0)
+        return;
+    if (m_transmitting)
+        return; // RX audio during TX is not the band
+
+    const funcs freqFunc = rigCaps->commands.contains(funcSelectedFreq) ? funcSelectedFreq : funcFreq;
+    const funcs modeFunc = rigCaps->commands.contains(funcSelectedMode) ? funcSelectedMode : funcMode;
+    const freqt f = queue->getCache(freqFunc, 0).value.value<freqt>();
+    const modeInfo m = queue->getCache(modeFunc, 0).value.value<modeInfo>();
+    if (f.Hz == 0)
+        return;
+
+    const bool cw = m.mk == modeCW || m.mk == modeCW_R;
+    const bool lower = m.mk == modeLSB || m.mk == modeCW_R || m.mk == modeRTTY || m.mk == modeLSB_D
+                       || m.mk == modePSK_R;
+    const bool am = m.mk == modeAM || m.mk == modeAMN || m.mk == modeS_AMD || m.mk == modeS_AML
+                    || m.mk == modeS_AMU;
+    const bool fm = m.mk == modeFM || m.mk == modeWFM || m.mk == modeDATAFM || m.mk == modeDATAFMN;
+
+    // Tell the engine the span for this mode; it applies from the next frame.
+    const int wantSpan = int(audioScopeSpanForMode(cw, am, fm));
+    rxProc->setAudioScopeSpanHz(wantSpan);
+
+    double pitchHz = 0.0;
+    if (cw) {
+        const int raw = queue->getCache(funcCwPitch, 0).value.toInt();
+        // Yaesu KP is an index (0..75 = 300..1050 Hz); Icom-style rigs report Hz.
+        pitchHz = (raw >= 0 && raw <= 75) ? 300.0 + 10.0 * raw : double(raw);
+        if (pitchHz <= 0.0)
+            pitchHz = 700.0;
+    }
+
+    const double spanHz = hzPerBin * (bins.size() - 1);
+    const AudioScopePlacement place = audioScopePlacement(f.MHzDouble, spanHz, lower, cw, pitchHz);
+
+    scopeData scope;
+    scope.valid = true;
+    scope.receiver = 0;
+    scope.mode = m.reg;
+    scope.oor = false;
+    scope.fixedEdge = 0;
+    scope.startFreq = place.startMHz;
+    scope.endFreq = place.endMHz;
+    if (place.reversed) {
+        QByteArray rev(bins.size(), 0);
+        for (int i = 0; i < bins.size(); ++i)
+            rev[i] = bins[bins.size() - 1 - i];
+        scope.data = rev;
+    } else {
+        scope.data = bins;
+    }
+    receivers[0]->setScopeData(scope);
 }
 
 void MainController::startAnrNoiseProfile()
@@ -5316,6 +5385,8 @@ void MainController::receiveRigCaps(rigCapabilities* caps)
             // Normal:
             cmdInterval_ms = queue->interval();
         }
+
+        updateAudioScopeEnabled();
 
         receivers.reserve(rigCaps->numReceiver);
         for (int i = 0; i < rigCaps->numReceiver; ++i) {

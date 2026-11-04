@@ -44,6 +44,8 @@ using rfft_plan = rfft_plan_i*;
 
 #include "prefs.h"   // RxNrMode, rxAudioProcessingPrefs
 
+class AudioScope;   // forward — defined in audioscope.h
+
 class SpeexNrProcessor;   // forward — defined in speexnrprocessor.h
 class AnrNrProcessor;     // forward — defined in anrnrprocessor.h
 class TriplePara;         // forward — defined in triple_para.h
@@ -108,6 +110,11 @@ public:
     // Spectrum capture — thread-safe; call from main thread.
     void setSpectrumEnabled(bool en);
     void setSpectrumFps(int fps);   // 1–60; default 10
+
+    // Audio scope (spectrum/waterfall from RX audio, for radios that send no
+    // scope data). Thread-safe; call from main thread.
+    void setAudioScopeEnabled(bool en);
+    void setAudioScopeSpanHz(int hz);
 
     // Runtime RX mute — silences received audio (sidetone still passes).
     // Not a persisted setting; defaults to unmuted. Thread-safe.
@@ -174,6 +181,9 @@ signals:
     void rxOutputLevel(float peak);
     // Emitted when the audio stream channel count changes (1 or 2).
     void rxAudioChannelsChanged(int channels);
+    // Emitted from the converter thread when the audio scope is enabled:
+    // one byte per bin (0..255), bin k = k * hzPerBin of audio.
+    void audioScopeFrame(QByteArray bins, double hzPerBin);
     // Emitted from stopAnrProfile() after the profile is built.
     void anrProfileReady(bool success);
     // Emitted at ~spectrumFps Hz when spectrum capture is enabled.
@@ -276,6 +286,12 @@ private:
 
     // Runtime RX mute (written from main thread, read on converter thread).
     std::atomic<bool> m_muted         { false };
+    // Audio scope: flags written from the main thread, engine used only on
+    // the converter thread.
+    std::atomic<bool> m_audioScopeEnabled { false };
+    std::atomic<int>  m_audioScopeSpanHz  { 3500 };
+    std::unique_ptr<AudioScope> m_audioScope;
+    void feedAudioScope(const Eigen::VectorXf &samples, float sampleRate, int channels, int channelSelect);
 
     rfft_plan              m_specFftPlan  { nullptr };
     std::vector<double>    m_specFftBuf;

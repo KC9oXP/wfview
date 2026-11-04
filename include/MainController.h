@@ -533,6 +533,9 @@ private:
     void setInitialTiming();
     void applyTxAudioProcPrefs(const txAudioProcessingPrefs& p);
     void applyRxAudioProcPrefs(const rxAudioProcessingPrefs& p);
+    // Spectrum/waterfall from RX audio for radios without a CAT scope.
+    void updateAudioScopeEnabled();
+    void handleAudioScopeFrame(const QByteArray &bins, double hzPerBin);
     void prepareRadioClockSync();
     void sendRadioClockSync();
     void setupClusterClient();

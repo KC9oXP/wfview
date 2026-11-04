@@ -14,6 +14,7 @@ int runRigCtlCompatTests(int argc, char **argv);
 int runRigCtlDTests(int argc, char **argv);
 int runRigProtocolTests(int argc, char **argv);
 int runYaesuCatQuirksTests(int argc, char **argv);
+int runAudioScopeTests(int argc, char **argv);
 
 int main(int argc, char **argv)
 {
@@ -33,5 +34,6 @@ int main(int argc, char **argv)
     status |= runRigCtlDTests(argc, argv);
     status |= runRigProtocolTests(argc, argv);
     status |= runYaesuCatQuirksTests(argc, argv);
+    status |= runAudioScopeTests(argc, argv);
     return status;
 }

@@ -290,6 +290,7 @@ SOURCES += \
     src/audio/resampler/resample.c \
     src/audio/txaudioprocessor.cpp \
     src/audio/rxaudioprocessor.cpp \
+    src/audio/audioscope.cpp \
     src/audio/anr/loguru.cpp \
     src/audio/anr/NoiseReduction.cpp \
     src/audio/anr/RealFFTf.cpp \
@@ -426,6 +427,7 @@ HEADERS  += \
     include/rigstate.h \
     include/rtpaudio.h \
     include/rxaudioprocessor.h \
+    include/audioscope.h \
     include/sidebandchooser.h \
     include/tciserver.h \
     include/tcpserver.h \

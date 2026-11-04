@@ -14,6 +14,7 @@
 #include "triple_para.h"
 #include "rxaudioprocessor.h"
 #include "cwsidetonegenerator.h"
+#include "audioscope.h"
 #include "logcategories.h"
 #include <cmath>
 #include <algorithm>
@@ -60,6 +61,49 @@ void RxAudioProcessor::setSpectrumEnabled(bool en)
 void RxAudioProcessor::setSpectrumFps(int fps)
 {
     m_specTargetFps.store(qBound(1, fps, 60), std::memory_order_relaxed);
+}
+
+void RxAudioProcessor::setAudioScopeEnabled(bool en)
+{
+    m_audioScopeEnabled.store(en, std::memory_order_relaxed);
+}
+
+void RxAudioProcessor::setAudioScopeSpanHz(int hz)
+{
+    m_audioScopeSpanHz.store(qBound(200, hz, 24000), std::memory_order_relaxed);
+}
+
+// Converter thread only. Raw radio audio (before mute, NR and EQ) so the
+// waterfall shows what the radio sends.
+void RxAudioProcessor::feedAudioScope(const Eigen::VectorXf &samples, float sampleRate, int channels,
+                                      int channelSelect)
+{
+    if (!m_audioScope)
+        m_audioScope = std::make_unique<AudioScope>();
+    if (!qFuzzyCompare(m_audioScope->sampleRate(), double(sampleRate)))
+        m_audioScope->setSampleRate(sampleRate);
+    const double span = m_audioScopeSpanHz.load(std::memory_order_relaxed);
+    if (!qFuzzyCompare(m_audioScope->spanHz(), span))
+        m_audioScope->setSpanHz(span);
+
+    std::vector<AudioScope::Frame> frames;
+    if (channels == 2) {
+        const int n = static_cast<int>(samples.size()) / 2;
+        std::vector<float> mono(static_cast<size_t>(n));
+        for (int i = 0; i < n; ++i) {
+            const float l = samples[i * 2], r = samples[i * 2 + 1];
+            mono[static_cast<size_t>(i)] = channelSelect == 1 ? l : channelSelect == 2 ? r : (l + r) * 0.5f;
+        }
+        m_audioScope->process(mono.data(), n, frames);
+    } else {
+        m_audioScope->process(samples.data(), static_cast<int>(samples.size()), frames);
+    }
+    if (frames.empty())
+        return;
+    // One frame per block is plenty; send the newest.
+    const AudioScope::Frame &f = frames.back();
+    emit audioScopeFrame(QByteArray(reinterpret_cast<const char *>(f.bins.data()), int(f.bins.size())),
+                         f.hzPerBin);
 }
 
 // ─── processAudio ────────────────────────────────────────────────────────────
@@ -111,6 +155,10 @@ Eigen::VectorXf RxAudioProcessor::processAudio(Eigen::VectorXf samples,
     // Clamp channel count
     if (channels < 1) channels = 1;
     if (channels > 2) channels = 2;
+
+    // ── Audio scope (radios without a CAT scope) ─────────────────────────────
+    if (m_audioScopeEnabled.load(std::memory_order_relaxed))
+        feedAudioScope(samples, sampleRate, channels, p.channelSelect);
 
     // ── Spectrum flag (read once per block) ──────────────────────────────────
     const bool specActive = m_specEnabled.load(std::memory_order_relaxed);
