@@ -1536,6 +1536,10 @@ Control {
                         id: filterWidthSlider
                         objectName: "filterWidth"
                         visible: drawerGrid.features.filterWidth === true
+                        // Without from/to a Slider runs 0..1, which sent 0-1 Hz widths.
+                        from: controller ? controller.filterWidthMin : 0
+                        to: controller ? controller.filterWidthMax : 4000
+                        stepSize: 50
                         value: controller ? controller.filterWidth : 0
                         onMoved: controller.filterWidth = value
                         //Layout.preferredWidth: 120

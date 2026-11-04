@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QByteArray>
 #include <QtGlobal>
 
 // Small, Qt-GUI-free helpers for the places where Yaesu CAT dialects differ
@@ -60,6 +61,38 @@ inline int splitFromExternal(quint16 modelID, int digit)
         return -1;
     }
     return digit != 0 ? 1 : 0;
+}
+
+// CT (tone mode): wfview uses 1 = tone (encode), 2 = tone squelch; the FT-991
+// uses CT01 = CTCSS encode/decode (tone squelch), CT02 = CTCSS encode only.
+// The mapping is its own inverse. 0 (off), 3 and 4 (DCS) pass through.
+inline int ft991ToneModeSwap(int v)
+{
+    if (v == 1)
+        return 2;
+    if (v == 2)
+        return 1;
+    return v;
+}
+
+// FT-991 "MT" answers carry a whole channel block (channel, frequency,
+// clarifier, mode, tones, shift) with the 12-character tag at the end.
+// Offset of the tag after "MT" and the channel number.
+constexpr int ft991MemoryTagOffset = 23; // matches hamlib newcat.c (ret_data[28] incl. "MT")
+constexpr int ft991MemoryTagLength = 12;
+
+// The channel of a memory read ("MR001;") that the radio answered with "?",
+// or -1. `wasMemoryRead`: the last command sent was a memory read.
+inline int rejectedMemoryReadChannel(bool wasMemoryRead, const QByteArray &lastSent)
+{
+    if (!wasMemoryRead || !lastSent.startsWith("MR"))
+        return -1;
+    QByteArray digits;
+    for (int i = 2; i < lastSent.size() && lastSent.at(i) >= '0' && lastSent.at(i) <= '9'; ++i)
+        digits.append(lastSent.at(i));
+    bool ok = false;
+    const int ch = digits.toInt(&ok);
+    return (ok && ch > 0) ? ch : -1;
 }
 
 // AC P1 P2 P3: the value of P3 that starts a tuning cycle.
