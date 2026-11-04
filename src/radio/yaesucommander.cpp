@@ -2,6 +2,7 @@
 #include <QDebug>
 
 #include "rigidentities.h"
+#include "yaesucatquirks.h"
 #include "logcategories.h"
 #include "printhex.h"
 #include "mcphooks.h"
@@ -708,11 +709,33 @@ bool yaesuCommander::queueParsedExternalCommand(funcs func, const funcType &type
     case funcSMeterSqlStatus:
     case funcSplitStatus:
     case funcTransceiverStatus:
+        if (func == funcSplitStatus && yaesuCatQuirks::isFt991(rigCaps.modelID)) {
+            // FT-991 clients set split with FT2 (off) / FT3 (on).
+            const int split = yaesuCatQuirks::splitFromExternal(rigCaps.modelID, d.mid(0, 1).toInt(&ok));
+            ok = ok && split >= 0;
+            value.setValue(split == 1);
+            break;
+        }
         value.setValue(d.mid(0, 1).toUShort(&ok) != 0);
         break;
+    case funcFilterWidth:
+    {
+        // Clients send the radio's width code; the queue carries Hz.
+        const ushort code = d.mid(0, type.bytes).toUShort(&ok);
+        ok = false;
+        const auto m = queue->getCache(rigCaps.commands.contains(funcSelectedMode) ? funcSelectedMode : funcMode, receiver)
+                           .value.value<modeInfo>();
+        for (const auto &w : rigCaps.widths) {
+            if (w.num == code && yaesuCatQuirks::widthAppliesToMode(w.bands, m.reg)) {
+                value.setValue<ushort>(w.hz);
+                ok = true;
+                break;
+            }
+        }
+        break;
+    }
     case funcPBTInner:
     case funcPBTOuter:
-    case funcFilterWidth:
         value.setValue<ushort>(d.mid(0, type.bytes).toUShort(&ok));
         break;
     case funcXitFreq:
@@ -756,6 +779,11 @@ bool yaesuCommander::queueParsedExternalCommand(funcs func, const funcType &type
                 break;
             case 1:
                 value.setValue<uchar>(1);
+                break;
+            case 2:
+                // FT-991: AC002 starts a tuning cycle.
+                ok = yaesuCatQuirks::isFt991(rigCaps.modelID);
+                value.setValue<uchar>(2);
                 break;
             case 3:
                 value.setValue<uchar>(2);
@@ -1117,7 +1145,7 @@ void yaesuCommander::parseData(QByteArray data)
             auto m = queue->getCache(rigCaps.commands.contains(funcSelectedMode)?funcSelectedMode:funcMode,receiver).value.value<modeInfo>();
             for (const auto& w: rigCaps.widths)
             {
-                if ((w.bands >> m.reg) & 0x01)
+                if (yaesuCatQuirks::widthAppliesToMode(w.bands, m.reg))
                 {
                     if (v == w.num)
                     {
@@ -1158,6 +1186,13 @@ void yaesuCommander::parseData(QByteArray data)
             // P2: 0=bypass, 1=standard ATU, 2=ATAS motorised antenna tuner.
             // P3: 0=not tuning, 1=tuning (standard ATU), 3=tuning (ATAS).
             uchar s = d.mid(0, type.bytes).toUShort();
+            if (yaesuCatQuirks::isFt991(rigCaps.modelID)) {
+                // FT-991: AC000 off, AC001 on, AC002 tuning.
+                const int st = yaesuCatQuirks::tunerStatusFromAnswer(rigCaps.modelID, s);
+                if (st >= 0)
+                    value.setValue<uchar>(uchar(st));
+                break;
+            }
             switch(s)  {
             case 0:
                 // 000: ATU bypass/off
@@ -1243,8 +1278,8 @@ void yaesuCommander::parseData(QByteArray data)
             value.setValue<short>(d.toShort());
             break;
         case funcCompressorLevel:
-            // We only want the second value.
-            value.setValue<uchar>(d.mid(type.bytes,type.bytes).toUShort());
+            // FT-710 answers two values and we only want the second; the FT-991 answers one.
+            value.setValue<uchar>(d.mid(yaesuCatQuirks::compressorLevelOffset(d.size(), type.bytes), type.bytes).toUShort());
             break;
         case funcScopeSpan:
             for (auto &s: rigCaps.scopeCenterSpans)
@@ -1711,8 +1746,10 @@ void yaesuCommander::receiveCommand(funcs func, QVariant value, uchar receiver)
                         payload.append(QString::number(1).rightJustified(3, QChar('0')).toLatin1());
                         break;
                     case 2:
-                        // Run standard ATU tuning cycle: P1=0, P2=0, P3=3
-                        payload.append(QString::number(3).rightJustified(3, QChar('0')).toLatin1());
+                        // Run standard ATU tuning cycle: P1=0, P2=0, P3=3 (FT-991: P3=2)
+                        payload.append(QString::number(yaesuCatQuirks::tunerTuneValue(rigCaps.modelID))
+                                           .rightJustified(3, QChar('0'))
+                                           .toLatin1());
                         break;
                     default:
                         break;
@@ -1724,6 +1761,9 @@ void yaesuCommander::receiveCommand(funcs func, QVariant value, uchar receiver)
                         payload.append(QString::number(value.value<uchar>()).leftJustified(1, QChar('0')).toLatin1());
                     else
                         payload.append(QString::number(value.value<uchar>()).rightJustified(1, QChar('0')).toLatin1());
+                } else if (func == funcSplitStatus && yaesuCatQuirks::isFt991(rigCaps.modelID)) {
+                    // FT-991: FT2 = transmit on VFO-A (split off), FT3 = transmit on VFO-B (split on).
+                    payload.append(QByteArray::number(yaesuCatQuirks::splitSetValue(rigCaps.modelID, value.value<uchar>())));
                 } else if (func==funcScopeMode)
                 {
                     qInfo(logRig()) << "Sending new scope mode" << char(value.value<uchar>());
@@ -1771,9 +1811,14 @@ void yaesuCommander::receiveCommand(funcs func, QVariant value, uchar receiver)
                     auto m = queue->getCache(rigCaps.commands.contains(funcSelectedMode)?funcSelectedMode:funcMode,receiver).value.value<modeInfo>();
                     for (const auto& w: rigCaps.widths)
                     {
-                        if ((w.bands >> m.reg) & 0x01 )
+                        if (yaesuCatQuirks::widthAppliesToMode(w.bands, m.reg))
                         {
                             if (w.hz >= width) {
+                                const int narrow = yaesuCatQuirks::isFt991(rigCaps.modelID)
+                                                       ? yaesuCatQuirks::ft991NarrowFor(m.reg, w.num)
+                                                       : -1;
+                                if (narrow >= 0)
+                                    payload.prepend(QByteArray("NA0") + QByteArray::number(narrow) + ";");
                                 payload.append(QString::number(w.num).rightJustified(cmd.bytes, QChar('0')).toLatin1());
                                 break;
                             }
