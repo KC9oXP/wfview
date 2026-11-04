@@ -433,6 +433,7 @@ HEADERS  += \
     include/usbcontroller.h \
     include/wfviewtypes.h \
     include/yaesucommander.h \
+    include/yaesucatquirks.h \
     include/yaesuserver.h \
     include/yaesuudpaudio.h \
     include/yaesuudpbase.h \
