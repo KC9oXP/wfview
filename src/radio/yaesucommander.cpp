@@ -1325,6 +1325,15 @@ void yaesuCommander::parseData(QByteArray data)
             qInfo(logRig()) << "Memory answer" << d.left(40) << "length" << d.size();
             memoryType mem;
             if (parseMemory(d,&rigCaps.memParser,&mem)) {
+                if (yaesuCatQuirks::isFt991(rigCaps.modelID)) {
+                    const int asked = yaesuCatQuirks::memoryReadChannel(lastCommand.func == funcMemoryContents,
+                                                                        lastCommand.data);
+                    if (asked > 0 && asked != int(mem.channel)) {
+                        qInfo(logRig()) << "Memory answer says channel" << mem.channel << "for MR" << asked
+                                        << "- using" << asked;
+                        mem.channel = quint16(asked);
+                    }
+                }
                 qInfo(logRig()) << "Memory parsed: channel" << mem.channel << "freq" << mem.frequency.Hz
                                 << "mode" << char(mem.mode) << "scan" << mem.scan;
                 value.setValue(mem);
