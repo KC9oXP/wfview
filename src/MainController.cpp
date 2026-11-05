@@ -2501,6 +2501,9 @@ QVariantMap MainController::repeaterState() const
                                       || rigCaps->commands.contains(funcSendFreqOffset));
     caps["quickSplit"] = rigCaps && rigCaps->commands.contains(funcQuickSplit);
     caps["secondaryVfo"] = rigCaps && rigCaps->commands.contains(funcVFOMainSelect);
+    // Split transmits on the other VFO; only offer it by default when wfview
+    // can also set that VFO's mode (the FT-991A, for one, cannot over CAT).
+    caps["otherVfoMode"] = rigCaps && rigCaps->commands.contains(funcUnselectedMode);
 
     QVariantMap state;
     state["available"] = rigCaps != nullptr && caps.values().contains(true);

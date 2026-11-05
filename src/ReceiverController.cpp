@@ -1263,7 +1263,7 @@ void ReceiverController::setIfShift(int v, bool u)
 
 void ReceiverController::setFilterWidth(int v, bool u)
 {
-    qInfo() << "*** FILTER WIDTH" << v << "user" <<u;
+    qDebug() << "*** FILTER WIDTH" << v << "user" <<u;
     if (filterWidth != v)
     {
         filterWidth = v;

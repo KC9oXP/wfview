@@ -21,6 +21,8 @@ private slots:
     void ft991MemoryTagIsAtTheEnd();
     void rejectedMemoryReadIsAnEmptyChannel();
     void memoryAnswerUsesTheRequestedChannel();
+    void ft991AttenuatorOnlyToSixMetres();
+    void ft991MemoryWriteMatchesCat();
     void ft991aRigFileMatchesCat();
 };
 
@@ -150,6 +152,46 @@ void YaesuCatQuirksTest::memoryAnswerUsesTheRequestedChannel()
     QCOMPARE(memoryReadChannel(true, "MR099;"), 99);
     QCOMPARE(memoryReadChannel(false, "MR001;"), -1);
     QCOMPARE(memoryReadChannel(true, "IF;"), -1);
+    QCOMPARE(memoryReadChannel(true, "MT005;", "MT"), 5);
+    QCOMPARE(memoryReadChannel(true, "MR005;", "MT"), -1);
+}
+
+void YaesuCatQuirksTest::ft991AttenuatorOnlyToSixMetres()
+{
+    QVERIFY(attenuatorAvailable(670, 7074000));
+    QVERIFY(attenuatorAvailable(670, 50313000));
+    QVERIFY(attenuatorAvailable(670, 56000000));
+    QVERIFY(!attenuatorAvailable(670, 144200000));
+    QVERIFY(!attenuatorAvailable(670, 446000000));
+    QVERIFY(!attenuatorAvailable(570, 446000000));
+    QVERIFY(attenuatorAvailable(670, 0));
+    QVERIFY(attenuatorAvailable(800, 446000000)); // other Yaesu models unchanged
+}
+
+void YaesuCatQuirksTest::ft991MemoryWriteMatchesCat()
+{
+    // Channel 2 as read from the radio: 145.247 MHz FM, ENC, minus shift.
+    const QByteArray w = ft991MemoryWrite(2, 145247000, 0, false, false, '4', 2, 2, "W9AB RPT");
+    QCOMPARE(w.size(), ft991MemoryWriteLength);
+    QCOMPARE(w, QByteArray("002145247000+000000402002" "0" "W9AB RPT    "));
+    // The first 25 characters line up with an MR answer (P7 = 0).
+    QCOMPARE(w.left(25).mid(3), QByteArray("007145247000+000000402002").mid(3));
+
+    QCOMPARE(ft991MemoryWrite(10, 7074000, -120, true, false, '2', 0, 0, ""),
+             QByteArray("010007074000-012010200000" "0" "            "));
+    // Long names are cut to 12 characters, non-ASCII becomes a space.
+    QCOMPARE(ft991MemoryWrite(1, 146520000, 0, false, false, '4', 0, 0, "CALLING FREQUENCY\x01").right(12),
+             QByteArray("CALLING FREQ"));
+    QCOMPARE(ft991MemoryWrite(1, 146520000, 0, false, false, '4', 0, 0, "A\x01" "B").right(12),
+             QByteArray("A B         "));
+    QCOMPARE(ft991MemoryWrite(1, 146520000, 20000, false, false, 'E', 0, 0, "").mid(12, 5), QByteArray("+9999"));
+
+    QVERIFY(ft991MemoryWrite(0, 146520000, 0, false, false, '4', 0, 0, "").isEmpty());
+    QVERIFY(ft991MemoryWrite(118, 146520000, 0, false, false, '4', 0, 0, "").isEmpty());
+    QVERIFY(ft991MemoryWrite(5, 0, 0, false, false, '4', 0, 0, "").isEmpty());
+    QVERIFY(ft991MemoryWrite(5, 146520000, 0, false, false, 'F', 0, 0, "").isEmpty());
+    QVERIFY(ft991MemoryWrite(5, 146520000, 0, false, false, '4', 5, 0, "").isEmpty());
+    QVERIFY(ft991MemoryWrite(5, 146520000, 0, false, false, '4', 0, 3, "").isEmpty());
 }
 
 void YaesuCatQuirksTest::ft991aRigFileMatchesCat()
@@ -191,9 +233,11 @@ void YaesuCatQuirksTest::ft991aRigFileMatchesCat()
     QCOMPARE(strings.value("Data Mod Source"), QStringLiteral("EX070"));
     QCOMPARE(strings.value("SSB Mod Source"), QStringLiteral("EX106"));
     QCOMPARE(bytes.value("Power Meter"), 3);
-    // MT/MW set formats differ from what wfview writes; read only for now.
+    // Memories are written with "MT" set (whole channel + name, see
+    // ft991MemoryWrite); the separate tag set stays off.
     QCOMPARE(canSet.value("Memory Tag"), false);
-    QCOMPARE(canSet.value("Memory Write"), false);
+    QCOMPARE(strings.value("Memory Write"), QStringLiteral("MT"));
+    QCOMPARE(canSet.value("Memory Write"), true);
 
     // Every width code is unique per mode and the widths only go up.
     const int widths = rig.beginReadArray("Widths");
