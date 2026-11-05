@@ -81,9 +81,10 @@ inline int ft991ToneModeSwap(int v)
 constexpr int ft991MemoryTagOffset = 23; // matches hamlib newcat.c (ret_data[28] incl. "MT")
 constexpr int ft991MemoryTagLength = 12;
 
-// The channel of a memory read ("MR001;") that the radio answered with "?",
-// or -1. `wasMemoryRead`: the last command sent was a memory read.
-inline int rejectedMemoryReadChannel(bool wasMemoryRead, const QByteArray &lastSent)
+// The FT-991A puts the channel shown on the radio (not the one asked for) in
+// the first three digits of every MR answer, so the channel number is taken
+// from the MR read that was sent instead. Returns -1 when it is not known.
+inline int memoryReadChannel(bool wasMemoryRead, const QByteArray &lastSent)
 {
     if (!wasMemoryRead || !lastSent.startsWith("MR"))
         return -1;
@@ -93,6 +94,13 @@ inline int rejectedMemoryReadChannel(bool wasMemoryRead, const QByteArray &lastS
     bool ok = false;
     const int ch = digits.toInt(&ok);
     return (ok && ch > 0) ? ch : -1;
+}
+
+// The channel of a memory read ("MR001;") that the radio answered with "?",
+// or -1. `wasMemoryRead`: the last command sent was a memory read.
+inline int rejectedMemoryReadChannel(bool wasMemoryRead, const QByteArray &lastSent)
+{
+    return memoryReadChannel(wasMemoryRead, lastSent);
 }
 
 // AC P1 P2 P3: the value of P3 that starts a tuning cycle.

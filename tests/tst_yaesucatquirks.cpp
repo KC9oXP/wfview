@@ -20,6 +20,7 @@ private slots:
     void ft991ToneModeIsSwapped();
     void ft991MemoryTagIsAtTheEnd();
     void rejectedMemoryReadIsAnEmptyChannel();
+    void memoryAnswerUsesTheRequestedChannel();
     void ft991aRigFileMatchesCat();
 };
 
@@ -141,6 +142,14 @@ void YaesuCatQuirksTest::rejectedMemoryReadIsAnEmptyChannel()
     QCOMPARE(rejectedMemoryReadChannel(false, "MR012;"), -1);
     QCOMPARE(rejectedMemoryReadChannel(true, "MT012;"), -1);
     QCOMPARE(rejectedMemoryReadChannel(true, "MR;"), -1);
+}
+
+void YaesuCatQuirksTest::memoryAnswerUsesTheRequestedChannel()
+{
+    QCOMPARE(memoryReadChannel(true, "MR001;"), 1);
+    QCOMPARE(memoryReadChannel(true, "MR099;"), 99);
+    QCOMPARE(memoryReadChannel(false, "MR001;"), -1);
+    QCOMPARE(memoryReadChannel(true, "IF;"), -1);
 }
 
 void YaesuCatQuirksTest::ft991aRigFileMatchesCat()
