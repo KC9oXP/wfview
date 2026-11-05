@@ -6326,6 +6326,9 @@ void MainController::receiveValueFromQueue(cacheItem val)
         break;
     }
     case funcFilterWidth:
+        // Update the width control as well as the passband, so a change on the
+        // radio shows in wfview (user=false: nothing is sent back).
+        receivers[val.receiver]->setFilterWidth(int(val.value.value<ushort>()), false);
         receivers[val.receiver]->setPassbandWidth(val.value.value<ushort>());
         break;
 
