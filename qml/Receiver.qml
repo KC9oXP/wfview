@@ -1527,6 +1527,7 @@ Control {
                     // === Filter width slider ===
                     Label {
                         text: qsTr("Filter width")
+                              + (controller && controller.filterWidth > 0 ? "\n" + controller.filterWidth + " Hz" : "")
                         Layout.preferredWidth: sideFlick.labelColW
                         Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
                         visible: filterWidthSlider.visible

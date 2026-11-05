@@ -1322,8 +1322,11 @@ void yaesuCommander::parseData(QByteArray data)
         // Contains the contents of the rig memory
         {
             qDebug() << "Received mem:" << d;
+            qInfo(logRig()) << "Memory answer" << d.left(40) << "length" << d.size();
             memoryType mem;
             if (parseMemory(d,&rigCaps.memParser,&mem)) {
+                qInfo(logRig()) << "Memory parsed: channel" << mem.channel << "freq" << mem.frequency.Hz
+                                << "mode" << char(mem.mode) << "scan" << mem.scan;
                 value.setValue(mem);
             }
             break;
@@ -1811,6 +1814,18 @@ void yaesuCommander::receiveCommand(funcs func, QVariant value, uchar receiver)
                         payload.append(QString::number(value.value<uchar>(),16).rightJustified(cmd.bytes, QChar('0')).toLatin1());
                 }
             }
+            else if (!strcmp(value.typeName(), "duplexMode_t") && func == funcSplitStatus)
+            {
+                // The repeater dialog's Off/Split buttons send a duplex mode, not a bool.
+                const duplexMode_t dm = value.value<duplexMode_t>();
+                if (dm == dmSplitOn || dm == dmSplitOff) {
+                    const int on = dm == dmSplitOn ? 1 : 0;
+                    payload.append(QByteArray::number(yaesuCatQuirks::splitSetValue(rigCaps.modelID, on)));
+                } else {
+                    qInfo(logRig()) << "Duplex mode" << int(dm) << "has no Yaesu split command; ignored";
+                    return;
+                }
+            }
             else if(!strcmp(value.typeName(),"uint"))
             {
                 if (func == funcMemoryContents || func == funcMemoryTag || func == funcMemoryTagB || func == funcSplitMemory || func == funcMemorySelect) {
@@ -1818,7 +1833,7 @@ void yaesuCommander::receiveCommand(funcs func, QVariant value, uchar receiver)
                         payload.append(QString::number(quint16(value.value<uint>() & 0xffff)).leftJustified(cmd.bytes, QChar('0')).toLatin1());
                     else
                         payload.append(QString::number(quint16(value.value<uint>() & 0xffff)).rightJustified(cmd.bytes, QChar('0')).toLatin1());
-                    qDebug(logRig()) << "Sending:" << funcString[func] << "command:" << payload;
+                    qInfo(logRig()) << "Sending:" << funcString[func] << "command:" << payload;
                 } else {
                     if (cmd.padr)
                         payload.append(QString::number(value.value<uint>()).leftJustified(cmd.bytes, QChar('0')).toLatin1());
