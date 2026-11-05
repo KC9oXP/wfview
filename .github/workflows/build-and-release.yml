@@ -48,7 +48,7 @@ jobs:
         shell: bash
         run: |
           SHORT=$(git -C wfview rev-parse --short HEAD)
-          TAG=$(git -C wfview tag --points-at HEAD | grep -E '^v?[0-9]+(\.[0-9]+)*$' | head -1)
+          TAG=$(git -C wfview tag --points-at HEAD | grep -E '^v?[0-9]+(\.[0-9]+)*$' | head -1 || true)
           if [ -n "$TAG" ]; then
             VERSION_STRING="$TAG"
             VERSION_NUMBER="${TAG#v}"
@@ -257,7 +257,7 @@ jobs:
         shell: bash
         run: |
           SHORT=$(git -C wfview rev-parse --short HEAD)
-          TAG=$(git -C wfview tag --points-at HEAD | grep -E '^v?[0-9]+(\.[0-9]+)*$' | head -1)
+          TAG=$(git -C wfview tag --points-at HEAD | grep -E '^v?[0-9]+(\.[0-9]+)*$' | head -1 || true)
           if [ -n "$TAG" ]; then
             VERSION_STRING="$TAG"
             VERSION_NUMBER="${TAG#v}"
@@ -458,7 +458,7 @@ jobs:
         id: version_info
         run: |
           SHORT=$(git -C wfview rev-parse --short HEAD)
-          TAG=$(git -C wfview tag --points-at HEAD | grep -E '^v?[0-9]+(\.[0-9]+)*$' | head -1)
+          TAG=$(git -C wfview tag --points-at HEAD | grep -E '^v?[0-9]+(\.[0-9]+)*$' | head -1 || true)
           if [ -n "$TAG" ]; then
             VERSION_STRING="$TAG"
             HAS_TAG=true
@@ -770,7 +770,7 @@ jobs:
         working-directory: wfview
         run: |
           SHORT=$(git rev-parse --short HEAD)
-          TAG=$(git tag --points-at HEAD | grep -E '^v?[0-9]+(\.[0-9]+)*$' | head -1)
+          TAG=$(git tag --points-at HEAD | grep -E '^v?[0-9]+(\.[0-9]+)*$' | head -1 || true)
           if [ -n "$TAG" ]; then
             VERSION_STRING="$TAG"
             HAS_TAG=true
@@ -1006,7 +1006,7 @@ jobs:
       id: version_info
       run: |
         SHORT=$(git rev-parse --short HEAD)
-        TAG=$(git tag --points-at HEAD | grep -E '^v?[0-9]+(\.[0-9]+)*$' | head -1)
+        TAG=$(git tag --points-at HEAD | grep -E '^v?[0-9]+(\.[0-9]+)*$' | head -1 || true)
         if [ -n "$TAG" ]; then
           VERSION_STRING="$TAG"
           HAS_TAG=true
@@ -1268,7 +1268,7 @@ jobs:
       id: version_info
       run: |
         SHORT=$(git rev-parse --short HEAD)
-        TAG=$(git tag --points-at HEAD | grep -E '^v?[0-9]+(\.[0-9]+)*$' | head -1)
+        TAG=$(git tag --points-at HEAD | grep -E '^v?[0-9]+(\.[0-9]+)*$' | head -1 || true)
         if [ -n "$TAG" ]; then
           VERSION_STRING="$TAG"
           HAS_TAG=true
