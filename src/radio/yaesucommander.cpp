@@ -1344,12 +1344,19 @@ void yaesuCommander::parseData(QByteArray data)
         {
             memoryTagType tag;
             if (yaesuCatQuirks::isFt991(rigCaps.modelID)) {
-                // FT-991: MT answer = channel(3) + channel block + 12-character tag.
+                // FT-991: MT answer = channel(3) + channel block + 12-character tag
+                // (the tag is the last 12 characters). The channel digits hold the
+                // channel shown on the radio, so use the channel of the MT read sent.
+                qInfo(logRig()) << "Memory tag answer" << d << "length" << d.size();
                 tag.num = (quint16)d.mid(0, type.bytes).toUShort();
+                const int asked = yaesuCatQuirks::memoryReadChannel(lastCommand.func == funcMemoryTag,
+                                                                    lastCommand.data, "MT");
+                if (asked > 0)
+                    tag.num = quint16(asked);
                 tag.en = true;
-                tag.name = QString::fromLatin1(d.mid(type.bytes + yaesuCatQuirks::ft991MemoryTagOffset,
-                                                     yaesuCatQuirks::ft991MemoryTagLength))
-                               .trimmed();
+                if (d.size() >= type.bytes + yaesuCatQuirks::ft991MemoryTagLength)
+                    tag.name = QString::fromLatin1(d.right(yaesuCatQuirks::ft991MemoryTagLength)).trimmed();
+                qInfo(logRig()) << "Memory tag parsed: channel" << tag.num << "name" << tag.name;
                 value.setValue(tag);
                 break;
             }
@@ -1688,6 +1695,16 @@ void yaesuCommander::receiveCommand(funcs func, QVariant value, uchar receiver)
     }
 
 
+    // FT-991A: no attenuator above 6 m; skip the read/set instead of drawing "?".
+    if (func == funcAttenuator) {
+        const freqt f = queue->getCache(rigCaps.commands.contains(funcSelectedFreq) ? funcSelectedFreq : funcFreq, 0)
+                            .value.value<freqt>();
+        if (!yaesuCatQuirks::attenuatorAvailable(rigCaps.modelID, f.Hz)) {
+            qDebug(logRig()) << "Attenuator not available at" << f.Hz << "Hz; command skipped";
+            return;
+        }
+    }
+
     //qInfo() << "requested command:" << funcString[func];
 
     funcType cmd = getCommand(func,payload,val,receiver);
@@ -1969,6 +1986,26 @@ void yaesuCommander::receiveCommand(funcs func, QVariant value, uchar receiver)
                 memorySplitType tag = value.value<memorySplitType>();
                 payload.append(QString("%0%1%2").arg(tag.num,cmd.bytes,10,QChar('0')).arg(tag.en,1,10,QChar('0')).arg(tag.freq,9,10,QChar('0')).toLatin1());
                 qDebug(logRig()) << "Sending"<< funcString[func] << "Payload:" << payload;
+            }
+            else if (!strcmp(value.typeName(),"memoryType") && func == funcMemoryWrite
+                     && yaesuCatQuirks::isFt991(rigCaps.modelID) && !value.value<memoryType>().sat)
+            {
+                // FT-991A: the rig file sends Memory Write as "MT", which writes the
+                // whole channel and its name in one command.
+                const memoryType mem = value.value<memoryType>();
+                const QByteArray name(mem.name, int(qstrnlen(mem.name, sizeof(mem.name))));
+                const QByteArray body = yaesuCatQuirks::ft991MemoryWrite(mem.channel, mem.frequency.Hz, mem.clarifier,
+                                                                         mem.clarRX, mem.clarTX, char(mem.mode),
+                                                                         mem.tonemode, mem.split, name);
+                if (body.isEmpty()) {
+                    qWarning(logRig()) << "Memory" << mem.channel << "not written: value out of range (freq"
+                                       << mem.frequency.Hz << "mode" << char(mem.mode) << "tone" << mem.tonemode
+                                       << "shift" << mem.split << ")";
+                    queue->del(func, receiver);
+                    return;
+                }
+                payload.append(body);
+                qInfo(logRig()) << "Writing memory" << mem.channel << ":" << payload;
             }
             else if (!strcmp(value.typeName(),"memoryType"))
             {

@@ -77,16 +77,18 @@ inline int ft991ToneModeSwap(int v)
 
 // FT-991 "MT" answers carry a whole channel block (channel, frequency,
 // clarifier, mode, tones, shift) with the 12-character tag at the end.
-// Offset of the tag after "MT" and the channel number.
+// Offset of the tag after "MT" and the channel number (kept for reference;
+// the parser now takes the last ft991MemoryTagLength characters).
 constexpr int ft991MemoryTagOffset = 23; // matches hamlib newcat.c (ret_data[28] incl. "MT")
 constexpr int ft991MemoryTagLength = 12;
 
 // The FT-991A puts the channel shown on the radio (not the one asked for) in
-// the first three digits of every MR answer, so the channel number is taken
-// from the MR read that was sent instead. Returns -1 when it is not known.
-inline int memoryReadChannel(bool wasMemoryRead, const QByteArray &lastSent)
+// the first three digits of every MR and MT answer, so the channel number is
+// taken from the read that was sent ("MR001;" / "MT001;") instead.
+// `prefix` is the command sent. Returns -1 when it is not known.
+inline int memoryReadChannel(bool wasMemoryRead, const QByteArray &lastSent, const char *prefix = "MR")
 {
-    if (!wasMemoryRead || !lastSent.startsWith("MR"))
+    if (!wasMemoryRead || !lastSent.startsWith(prefix))
         return -1;
     QByteArray digits;
     for (int i = 2; i < lastSent.size() && lastSent.at(i) >= '0' && lastSent.at(i) <= '9'; ++i)
@@ -101,6 +103,60 @@ inline int memoryReadChannel(bool wasMemoryRead, const QByteArray &lastSent)
 inline int rejectedMemoryReadChannel(bool wasMemoryRead, const QByteArray &lastSent)
 {
     return memoryReadChannel(wasMemoryRead, lastSent);
+}
+
+// The FT-991A attenuator (RA) exists only on HF and 6 m: above that the radio
+// answers "?" (seen on the radio: RA works on 50 MHz, fails after leaving 6 m).
+// Its HF/50 MHz range ends at 56 MHz. `hz` 0 = frequency not known yet.
+constexpr quint64 ft991AttenuatorMaxHz = 56000000ULL;
+inline bool attenuatorAvailable(quint16 modelID, quint64 hz)
+{
+    return !isFt991(modelID) || hz == 0 || hz <= ft991AttenuatorMaxHz;
+}
+
+// FT-991A memory write. MW cannot store the name, but "MT" set writes the whole
+// channel including the 12-character tag (CAT manual, MT set, 38 characters):
+//   P1 channel(3) P2 freq(9) P3 clarifier(+/-nnnn) P4 RX clar P5 TX clar
+//   P6 mode(1 hex) P7 "0" P8 CTCSS/DCS mode(0-4) P9 "00" P10 shift(0-2)
+//   P11 "0" P12 tag(12, space padded)
+// Returns the body after "MT", or an empty array when a value is out of range.
+constexpr int ft991MemoryWriteLength = 38;
+inline QByteArray ft991MemoryWrite(int channel, quint64 hz, int clarifier, bool clarRx, bool clarTx,
+                                   char mode, int toneMode, int shift, const QByteArray &name)
+{
+    if (channel < 1 || channel > 117 || hz == 0 || hz > 999999999ULL)
+        return QByteArray();
+    if (!((mode >= '1' && mode <= '9') || (mode >= 'A' && mode <= 'E')))
+        return QByteArray();
+    if (toneMode < 0 || toneMode > 4 || shift < 0 || shift > 2)
+        return QByteArray();
+    if (clarifier > 9999)
+        clarifier = 9999;
+    if (clarifier < -9999)
+        clarifier = -9999;
+
+    QByteArray tag;
+    for (char c : name) {
+        if (tag.size() == ft991MemoryTagLength)
+            break;
+        tag.append((c >= 0x20 && c <= 0x7E) ? c : ' ');
+    }
+
+    QByteArray out;
+    out.append(QByteArray::number(channel).rightJustified(3, '0'));
+    out.append(QByteArray::number(hz).rightJustified(9, '0'));
+    out.append(clarifier < 0 ? '-' : '+');
+    out.append(QByteArray::number(clarifier < 0 ? -clarifier : clarifier).rightJustified(4, '0'));
+    out.append(clarRx ? '1' : '0');
+    out.append(clarTx ? '1' : '0');
+    out.append(mode);
+    out.append('0');
+    out.append(char('0' + toneMode));
+    out.append("00");
+    out.append(char('0' + shift));
+    out.append('0');
+    out.append(tag.leftJustified(ft991MemoryTagLength, ' '));
+    return out;
 }
 
 // AC P1 P2 P3: the value of P3 that starts a tuning cycle.

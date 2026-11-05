@@ -238,7 +238,8 @@ ApplicationWindow {
                     CheckBox {
                         id: autoEnableSplit
                         text: qsTr("Enable split")
-                        checked: true
+                        // Off by default when wfview cannot set the other VFO's mode.
+                        checked: caps.otherVfoMode === true
                     }
                     Item { Layout.fillWidth: true }
                     Item { Layout.fillWidth: true }
@@ -275,6 +276,15 @@ ApplicationWindow {
                     }
                     Item { Layout.fillWidth: true }
                     Item { Layout.fillWidth: true }
+
+                    Label {
+                        visible: caps.otherVfoMode !== true
+                        Layout.columnSpan: 5
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: palette.highlight
+                        text: qsTr("wfview cannot set the other VFO's mode on this radio. Split transmits on that VFO, so check its mode on the radio first.")
+                    }
                 }
             }
 
