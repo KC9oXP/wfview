@@ -26,7 +26,7 @@ TARGET = wfview
 TEMPLATE = app
 
 # IC-7610 build numbering: <wfview base>.<NNN>
-DEFINES += WFVIEW_VERSION=\\\"3.00.001\\\"
+DEFINES += WFVIEW_VERSION=\\\"3.00.003\\\"
 
 DEFINES += BUILD_WFVIEW
 
